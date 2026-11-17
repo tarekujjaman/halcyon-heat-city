@@ -11,8 +11,11 @@ export const VEHICLE_SPECS = {
   pickup: { name: 'Dockhand Pickup', length: 5.3, width: 2.0, height: 1.7, mass: 1900, maxSpeed: 40, accel: 5.0, brake: 11, grip: 0.9, turn: 0.8, open: false, seatY: 0.8, colors: ['#9a3b3b', '#2f4858', '#c9c9c9', '#4f6d7a', '#d08c60'] },
   van: { name: 'Saltmarsh Van', length: 5.1, width: 2.1, height: 2.1, mass: 2100, maxSpeed: 36, accel: 4.4, brake: 10, grip: 0.85, turn: 0.75, open: false, seatY: 0.9, colors: ['#ffffff', '#d9d9d9', '#3a5a40', '#8ecae6', '#e76f51'] },
   cruiser: { name: 'HPD Interceptor', length: 4.9, width: 1.9, height: 1.45, mass: 1600, maxSpeed: 55, accel: 7.4, brake: 14, grip: 1.05, turn: 1.0, open: false, seatY: 0.6, colors: ['#ffffff'] },
-  bike: { name: 'Kestrel 900', length: 2.2, width: 0.75, height: 1.1, mass: 260, maxSpeed: 60, accel: 9.5, brake: 13, grip: 0.9, turn: 1.3, open: true, seatY: 0.75, colors: ['#111111', '#c1121f', '#1f7a8c', '#f4d35e'] },
+  bike: { name: 'Kestrel 900', length: 2.2, width: 0.75, height: 1.1, mass: 260, maxSpeed: 60, accel: 9.5, brake: 13, grip: 0.9, turn: 1.3, open: true, seatY: 0.84, colors: ['#111111', '#c1121f', '#1f7a8c', '#f4d35e'] },
 };
+
+/** Where a rider sits on the Kestrel: the saddle top, its centre along the bike, and the peg height. */
+export const BIKE_SEAT = { y: 0.84, z: -0.45, pegY: 0.37 };
 
 const paintCache = new Map();
 let environment = null;
@@ -106,14 +109,19 @@ function geometriesFor(type) {
   const dark = '#23252b';
   const chrome = '#d8dbe0';
   if (type === 'bike') {
+    // Frame spine, tank, saddle (top at BIKE_SEAT.y), lower frame, bars over the fork within a
+    // seated rider's reach, exhaust, and the foot pegs under the saddle.
     body.box(-0.12, 0.55, -0.35, 0.24, 0.3, 1.3, white);
-    body.box(-0.16, 0.78, 0.05, 0.32, 0.22, 0.6, white);
-    trim.box(-0.2, 0.62, -0.95, 0.4, 0.22, 0.6, dark);
+    body.box(-0.16, 0.78, 0.0, 0.32, 0.22, 0.45, white);
+    trim.box(-0.2, 0.62, -0.8, 0.4, BIKE_SEAT.y - 0.62, 0.64, dark);
     trim.box(-0.05, 0.3, -0.9, 0.1, 0.35, 1.8, dark);
-    trim.rotatedBox(0, 0.9, 0.75, 0.6, 0.05, 0.05, 0, chrome);
-    trim.box(-0.03, 0.4, 0.6, 0.06, 0.5, 0.06, chrome);
+    trim.rotatedBox(0, 0.96, 0.42, 0.62, 0.05, 0.05, 0, chrome);
+    trim.box(-0.03, 0.4, 0.39, 0.06, 0.56, 0.06, chrome);
+    trim.box(-0.05, 0.3, 0.37, 0.1, 0.1, 0.42, '#5a5a5a');
     trim.box(-0.06, 0.35, -0.5, 0.12, 0.08, 0.6, '#5a5a5a');
-    lamps.box(-0.08, 0.85, 0.72, 0.16, 0.12, 0.08, '#fff2c0');
+    trim.box(-0.31, BIKE_SEAT.pegY - 0.04, BIKE_SEAT.z - 0.06, 0.13, 0.04, 0.12, '#333');
+    trim.box(0.18, BIKE_SEAT.pegY - 0.04, BIKE_SEAT.z - 0.06, 0.13, 0.04, 0.12, '#333');
+    lamps.box(-0.08, 0.82, 0.54, 0.16, 0.12, 0.08, '#fff2c0');
     brake.box(-0.07, 0.8, -1.02, 0.14, 0.08, 0.06, '#ff2020');
     geometryCache.set(type, finish(body, trim, lamps, brake));
     return geometryCache.get(type);
@@ -279,11 +287,11 @@ export function createVehicleModel(type, color) {
     bodyGroup.add(glowR, glowB);
     const glowTex = ensureTextures().glow;
     const spriteR = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#ff2a2a', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
-    spriteR.position.set(-0.3, barY + 0.05, -0.55);
-    spriteR.scale.set(2.2, 1.6, 1);
+    spriteR.position.set(-0.38, barY + 0.1, -0.55);
+    spriteR.scale.set(2.8, 2.0, 1);
     const spriteB = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#2a6aff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
-    spriteB.position.set(0.3, barY + 0.05, -0.55);
-    spriteB.scale.set(2.2, 1.6, 1);
+    spriteB.position.set(0.38, barY + 0.1, -0.55);
+    spriteB.scale.set(2.8, 2.0, 1);
     bodyGroup.add(spriteR, spriteB);
     lightbar = { red, blue, glowR, glowB, spriteR, spriteB, phase: 0 };
   }
@@ -297,8 +305,11 @@ export function createVehicleModel(type, color) {
   const engine = new THREE.Object3D();
   engine.position.set(0, spec.height * 0.6, L / 2 - 0.8);
   bodyGroup.add(engine);
+  // The seat point: a rider's pelvis rests here (characters.js drops the figure's origin by its
+  // seat height), on the saddle top of the bike or the driver's cushion of a car.
   const seat = new THREE.Object3D();
-  seat.position.set(type === 'bike' ? 0 : -0.35, spec.seatY, type === 'bike' ? -0.25 : -0.3);
+  if (type === 'bike') seat.position.set(0, BIKE_SEAT.y, BIKE_SEAT.z);
+  else seat.position.set(-0.35, spec.seatY, -0.3);
   bodyGroup.add(seat);
   return { root, bodyGroup, body, trim, lamps, brake, wheels, steerPivots, lightbar, engine, seat, spec, type };
 }

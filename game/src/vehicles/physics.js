@@ -1,7 +1,8 @@
 // Arcade car physics: a throttle that ramps in, an engine curve gentle at launch and strongest in
 // the mid range, smooth braking and reversing, speed-sensitive steering, handbrake drifts with
-// lateral grip loss, kerbs and the ground slope, static collisions with impact damage scaled by
-// closing speed (scrapes are free), car-to-car impulses by mass, and the smoke-fire-explosion ladder.
+// lateral grip loss, a throttle that brakes first when rolling backwards, kerbs (a speed cost once
+// per bump) and the ground slope (free), static collisions with impact damage scaled by closing
+// speed (scrapes are free), car-to-car impulses by mass, and the smoke-fire-explosion ladder.
 import { DAMAGE, DRIVING } from '../config.js';
 import { circleOverlap } from '../collision.js';
 
@@ -54,9 +55,12 @@ export function stepDriving(v, dt, groundHeight) {
   let vLat = v.vx * rx + v.vz * rz;
   const speed = Math.abs(vLong);
 
-  // Engine, brakes and reverse.
+  // Engine, brakes and reverse. The throttle while rolling backwards is a firm brake first
+  // (at the pedal's raw value, so it bites before the ramp), then drive.
   const braking = c.brake > 0 && !v.wrecked;
-  if (v.throttle > 0.001 && vLong > -0.5) {
+  if (vLong < -0.5 && c.throttle > 0.001 && !v.wrecked) {
+    vLong = Math.min(0, vLong + spec.brake * Math.max(c.throttle, v.throttle) * dt);
+  } else if (v.throttle > 0.001 && vLong > -0.5) {
     vLong += spec.accel * engineCurve(vLong / spec.maxSpeed) * v.throttle * dt;
   }
   if (braking) {
@@ -95,16 +99,26 @@ export function stepDriving(v, dt, groundHeight) {
   v.x += v.vx * dt;
   v.z += v.vz * dt;
 
-  // Ground: follow the kerbs and the beach slope, losing a little speed on a kerb.
+  // Ground: follow the kerbs and the beach slope. A kerb is a sudden step in the ground height
+  // between two substeps (far larger than the step before it) and costs a little speed once per
+  // bump; a slope changes the height steadily, step after step, and costs nothing, however far
+  // the body lags behind it at speed.
   const gy = groundHeight(v.x, v.z);
-  const dy = gy - v.y;
-  if (Math.abs(dy) > 0.1 && speed > 4) {
+  const prevGround = v.groundY === undefined ? gy : v.groundY;
+  const groundStep = gy - prevGround;
+  const prevStep = v.groundStep || 0;
+  v.groundY = gy;
+  v.groundStep = groundStep;
+  v.curbTimer = Math.max(0, (v.curbTimer || 0) - dt);
+  const sudden = Math.abs(groundStep) > DRIVING.curbStep && Math.abs(groundStep) > Math.abs(prevStep) * 2.5;
+  if (sudden && speed > 4 && v.curbTimer <= 0) {
+    v.curbTimer = DRIVING.curbCooldown;
     const loss = DRIVING.curbSpeedLoss;
     v.vx *= loss;
     v.vz *= loss;
     v.bump = Math.min(1, (v.bump || 0) + 0.6);
   }
-  v.y += dy * Math.min(1, dt * 14);
+  v.y += (gy - v.y) * Math.min(1, dt * 14);
   v.bump = (v.bump || 0) * Math.exp(-dt * 5);
   v.wheelSpin += (vLong / 0.33) * dt;
   v.odometer += Math.abs(vLong) * dt;
@@ -169,10 +183,21 @@ export function damageVehicle(v, amount, source = 'damage') {
   if (v.wrecked) return;
   v.hp = Math.max(0, v.hp - amount);
   v.damageEvents.push({ amount, source });
-  if (v.hp <= DAMAGE.fireAt && !v.onFire) {
-    v.onFire = true;
-    v.fuse = DAMAGE.fuseSeconds;
-  }
+  if (v.hp <= DAMAGE.fireAt) igniteVehicle(v);
+}
+
+/**
+ * Set a car alight: the full fuse starts now (never shortened by the hit that lit it, since the
+ * fuse only burns down in the fleet's own update) and the fleet's ignite listeners fire at once,
+ * which is where the driver's warning comes from. Every damage path ends here.
+ */
+export function igniteVehicle(v) {
+  if (v.onFire || v.wrecked) return false;
+  v.onFire = true;
+  v.fuse = DAMAGE.fuseSeconds;
+  v.fuseStarted = false;
+  if (v.onIgnite) v.onIgnite(v);
+  return true;
 }
 
 /** Resolve one pair of vehicles: separation by mass, an impulse along the normal, damage by closing speed. */

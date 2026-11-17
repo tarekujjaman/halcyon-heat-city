@@ -167,7 +167,7 @@ export function createTraffic(G) {
         continue;
       }
       v.ai.step(dt, ctx);
-      if (v.rider) v.rider.animateSeated(true, v.model.bodyGroup.rotation.z * 0.5);
+      if (v.rider) v.rider.animateSeated(true, v.model.bodyGroup.rotation.z * 0.35);
       if (v.horn > 0 && d < 60) G.audio.horn(v);
     }
   }

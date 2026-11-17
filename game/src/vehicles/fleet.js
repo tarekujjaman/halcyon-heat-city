@@ -1,28 +1,31 @@
 // The vehicle fleet: spawning and pooling every car in the world (the player's, traffic, police,
 // mission cars), running their physics and pairwise collisions, animating wheels, brake lights,
-// lightbars and body roll, the smoke-fire-explosion ladder, and finding cars to steal.
+// lightbars, body roll to the outside of a turn and a bike's lean into it, the smoke-fire-
+// explosion ladder with its ignite listeners and fuse, and finding cars to steal.
 import * as THREE from 'three';
 import { DAMAGE } from '../config.js';
 import { frand } from '../rng.js';
 import { createVehicleModel, setVehiclePaint, VEHICLE_SPECS } from './models.js';
-import { collidePair, collideStatic, settleVehicle, stepDriving } from './physics.js';
+import { collidePair, collideStatic, igniteVehicle, settleVehicle, stepDriving } from './physics.js';
 
 export function createFleet(world, effects) {
   const vehicles = [];
   const pairTimers = new Map();
   let nextId = 1;
   let now = 0;
-  const listeners = { explosion: [], impact: [] };
+  const listeners = { explosion: [], impact: [], ignite: [] };
+  const announceFire = (v) => { for (const fn of listeners.ignite) fn(v); };
 
   function spawn(type, x, z, yaw, options = {}) {
     const spec = VEHICLE_SPECS[type];
     const color = options.color || spec.colors[Math.floor((options.rng ? options.rng.next() : frand()) * spec.colors.length)];
     const model = createVehicleModel(type, color);
+    const y = world.layout.groundHeight(x, z);
     const v = {
       id: nextId, type, spec, model, color,
-      x, z, y: world.layout.groundHeight(x, z), yaw,
+      x, z, y, yaw, groundY: y,
       vx: 0, vz: 0, speed: 0, slip: 0, steer: 0, throttle: 0, yawRate: 0, wheelSpin: 0, odometer: 0,
-      hp: 100, onFire: false, fuse: 0, wrecked: false, smoking: false,
+      hp: 100, onFire: false, fuse: 0, fuseStarted: false, wrecked: false, smoking: false, onIgnite: announceFire,
       ctrl: { throttle: 0, brake: 0, steer: 0, handbrake: false },
       circles: [], impactTimer: 0, damageEvents: [], lastImpact: null,
       driver: null, role: options.role || 'traffic', ai: null, parked: !!options.parked, static: false,
@@ -65,8 +68,14 @@ export function createFleet(world, effects) {
     const m = v.model;
     m.root.position.set(v.x, v.y, v.z);
     m.root.rotation.y = v.yaw;
-    const targetRoll = Math.max(-0.07, Math.min(0.07, -v.slip * 0.012));
-    const bikeLean = v.spec.open ? -v.steer * Math.min(1, Math.abs(v.speed) / 12) * 0.38 : 0;
+    // Roll about the body's own z: the vehicle's right side is local -x, so a positive roll
+    // drops the right side. A right turn (steer > 0, yawRate < 0, slip < 0) rolls a car's body
+    // to the outside (left side down, negative) and leans a bike into it (right side down, positive).
+    const lateralG = v.speed * v.yawRate;
+    let targetRoll = 0;
+    let bikeLean = 0;
+    if (v.spec.open) bikeLean = v.steer * Math.min(1, Math.abs(v.speed) / 12) * 0.38;
+    else targetRoll = Math.max(-0.07, Math.min(0.07, lateralG * 0.0045 + v.slip * 0.008));
     m.bodyGroup.rotation.z += (targetRoll + bikeLean - m.bodyGroup.rotation.z) * Math.min(1, dt * 10);
     const accelPitch = -(v.throttle * 0.02) + (v.ctrl.brake > 0 && v.speed > 2 ? 0.025 : 0) + v.bump * 0.03 * Math.sin(now * 40);
     m.bodyGroup.rotation.x += (accelPitch - m.bodyGroup.rotation.x) * Math.min(1, dt * 8);
@@ -84,8 +93,11 @@ export function createFleet(world, effects) {
         lb.blue.scale.setScalar(on ? 1 : 1.25);
         lb.glowR.intensity = on ? 9 : 0;
         lb.glowB.intensity = on ? 0 : 9;
-        lb.spriteR.visible = on;
-        lb.spriteB.visible = !on;
+        // Both glows stay lit, the live one bright: red and blue read together from afar.
+        lb.spriteR.visible = true;
+        lb.spriteB.visible = true;
+        lb.spriteR.material.opacity = on ? 1 : 0.45;
+        lb.spriteB.material.opacity = on ? 0.45 : 1;
       } else {
         lb.red.visible = true;
         lb.blue.visible = true;
@@ -122,10 +134,17 @@ export function createFleet(world, effects) {
       stepDriving(v, dt, world.layout.groundHeight);
       const hit = collideStatic(v, colliders);
       if (hit > 2) for (const fn of listeners.impact) fn(v, hit, null);
-      if (v.onFire) {
-        v.fuse -= dt;
-        if (v.fuse <= 0) explode(v);
+    }
+    // The fuse burns only here, from the step after the one that lit it: whoever set the car on
+    // fire (this step's crash included) never shortens the time the driver has to get out.
+    for (const v of vehicles) {
+      if (!v.onFire) continue;
+      if (!v.fuseStarted) {
+        v.fuseStarted = true;
+        continue;
       }
+      v.fuse -= dt;
+      if (v.fuse <= 0) explode(v);
     }
     // Pairwise collisions among nearby vehicles.
     for (let i = 0; i < vehicles.length; i += 1) {
@@ -192,6 +211,9 @@ export function createFleet(world, effects) {
     vehicles, spawn, remove, explode, update, nearest, spotFree,
     onExplosion: (fn) => listeners.explosion.push(fn),
     onImpact: (fn) => listeners.impact.push(fn),
+    /** Called the moment any vehicle catches fire, before its fuse starts burning. */
+    onIgnite: (fn) => listeners.ignite.push(fn),
+    ignite: igniteVehicle,
     repaint(v, color) {
       v.color = color;
       setVehiclePaint(v.model, color);
@@ -199,6 +221,7 @@ export function createFleet(world, effects) {
     repair(v) {
       v.hp = 100;
       v.onFire = false;
+      v.fuseStarted = false;
       v.smoking = false;
     },
     /** Visible, driveable and not on fire: what the HUD counts as a car worth taking. */

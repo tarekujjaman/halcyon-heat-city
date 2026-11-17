@@ -3,7 +3,7 @@
 // arrests and hospital trips that end a fight. Every NPC module registers its people here.
 import * as THREE from 'three';
 import { DAMAGE, WANTED } from './config.js';
-import { vehicleCircles } from './vehicles/physics.js';
+import { igniteVehicle, vehicleCircles } from './vehicles/physics.js';
 
 const scratchCircles = [];
 const hitPoint = new THREE.Vector3();
@@ -86,14 +86,11 @@ export function createCombat(G) {
       return hit;
     },
 
+    /** Bullet, blast or helicopter damage to a car; the fire and its warning come from the fleet. */
     damageVehicle(v, amount, source) {
       if (v.wrecked) return;
       v.hp = Math.max(0, v.hp - amount);
-      if (v.hp <= DAMAGE.fireAt && !v.onFire) {
-        v.onFire = true;
-        v.fuse = DAMAGE.fuseSeconds;
-        if (v.driver === G.player) G.notify('The car is on fire. Get out!');
-      }
+      if (v.hp <= DAMAGE.fireAt) igniteVehicle(v);
       if (v.driver === G.player && source !== G.player) G.hud.flashDamage(0.3);
     },
 

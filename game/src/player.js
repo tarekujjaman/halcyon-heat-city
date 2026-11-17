@@ -1,6 +1,7 @@
 // Marisol "Sol" Vega on foot and at the wheel: camera-relative walking and running, jumping,
-// collision with walls, cars and people, entering and leaving vehicles (stealing them with F, the
-// driver fleeing), being run over, health and armor, and the figure's animation.
+// collision with walls, cars and people, entering and leaving vehicles (stealing them with F or E,
+// the driver fleeing), no control while surrendering to an arrest, being run over, health and
+// armor, and the figure's animation (seated on the bike's saddle when riding).
 import * as THREE from 'three';
 import { PLAYER, DAMAGE } from './config.js';
 import { KEYS } from './input.js';
@@ -70,8 +71,8 @@ export function createPlayer(G) {
     if (v.spec.open) {
       model.setVisible(true);
       v.model.seat.add(model.group);
-      model.group.position.set(0, 0, 0);
       model.group.rotation.set(0, 0, 0);
+      model.animateSeated(true, 0);
     } else {
       model.setVisible(false);
     }
@@ -310,11 +311,12 @@ export function createPlayer(G) {
       p.state = 'foot';
       return;
     }
-    const control = !p.dead && !v.wrecked;
+    // No control while dead, wrecked or surrendering to an arrest: the car brakes to a stop.
+    const control = !p.dead && !v.wrecked && !p.surrender;
     v.ctrl.throttle = control && input.isDown(KEYS.forward) ? 1 : 0;
-    v.ctrl.brake = control && input.isDown(KEYS.back) ? 1 : 0;
+    v.ctrl.brake = control ? (input.isDown(KEYS.back) ? 1 : 0) : 1;
     v.ctrl.steer = control ? (input.isDown(KEYS.right) ? 1 : 0) - (input.isDown(KEYS.left) ? 1 : 0) : 0;
-    v.ctrl.handbrake = control && input.isDown(KEYS.handbrake);
+    v.ctrl.handbrake = control ? input.isDown(KEYS.handbrake) : Math.abs(v.speed) < 2;
     v.horn = control && input.isDown(KEYS.horn) ? 1 : 0;
     p.x = v.x;
     p.z = v.z;
@@ -322,25 +324,21 @@ export function createPlayer(G) {
     p.yaw = v.yaw;
     p.distanceDriven += Math.abs(v.speed) * dt;
     if (v.spec.open) {
-      model.animateSeated(true, v.model.bodyGroup.rotation.z * 0.5);
+      // Seated on the bike: the rider leans with it, hanging a little less than the machine.
+      model.animateSeated(true, v.model.bodyGroup.rotation.z * 0.35);
     }
-    // Crashes hurt the car; only a very hard one reaches the driver.
+    // Crashes hurt the car; only a very hard one reaches the driver. (The fire warning comes
+    // from the fleet's ignite listener in main.js, the moment the fuse starts.)
     if (v.lastImpact && !v.lastImpact.seen) {
       v.lastImpact.seen = true;
       if (v.lastImpact.closing > DAMAGE.driverHurtSpeed) p.damage(DAMAGE.driverHurt * (v.spec.open ? 3 : 1), 'crash');
       G.camera.kick(Math.min(1, v.lastImpact.closing / 15));
     }
-    if (v.onFire && !v.fireWarned) {
-      v.fireWarned = true;
-      G.notify('The car is on fire. Get out!');
-      G.hud.banner('GET OUT', 'The car is about to explode', 'failed');
-      G.audio.play('wantedUp');
-    }
     if (v.wrecked) {
       p.damage(DAMAGE.explosionDamage, 'explosion');
       if (!p.dead) p.exitVehicle();
     }
-    if (control && input.wasPressed(KEYS.enter)) {
+    if (control && (input.wasPressed(KEYS.enter) || input.wasPressed(KEYS.interact))) {
       if (Math.abs(v.speed) < 9) p.exitVehicle();
       else G.notify('Slow down to get out');
     }
@@ -350,7 +348,7 @@ export function createPlayer(G) {
     if (p.state === 'car') carUpdate(dt, input);
     else {
       footUpdate(dt, input);
-      if (!p.dead && !p.surrender && input.wasPressed(KEYS.enter)) {
+      if (!p.dead && !p.surrender && (input.wasPressed(KEYS.enter) || input.wasPressed(KEYS.interact))) {
         const v = G.fleet.nearest(p.x, p.z, 4.2, (c) => !c.wrecked);
         if (v) p.enterVehicle(v);
         else G.notify('No car within reach');
