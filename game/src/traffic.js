@@ -67,7 +67,7 @@ export function createTraffic(G) {
     }
     const people = [G.player.state === 'foot' ? G.player : null, ...G.pedestrians.list];
     for (const n of people) {
-      if (!n || n.dead) continue;
+      if (!n || n.dead || n.knocked) continue;
       const dx = n.x - v.x;
       const dz = n.z - v.z;
       const lz = dx * fx + dz * fz;

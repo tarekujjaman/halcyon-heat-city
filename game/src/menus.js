@@ -34,6 +34,8 @@ export function createMenus(G, root) {
       root.classList.remove('hidden');
     } else root.classList.add('hidden');
     openPanel = id;
+    const hud = document.getElementById('hud');
+    if (hud) hud.classList.toggle('dimmed', !!id && id !== 'death');
   }
 
   function button(label, onClick, cls = '') {

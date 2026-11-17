@@ -15,6 +15,7 @@ import { createActivities } from './activities.js';
 import { createPlayer } from './player.js';
 import { createCamera } from './camera.js';
 import { createFleet } from './vehicles/fleet.js';
+import { setVehicleEnvironment } from './vehicles/models.js';
 import { createTraffic } from './traffic.js';
 import { createPedestrians } from './pedestrians.js';
 import { createMarkers } from './markers.js';
@@ -72,6 +73,8 @@ function createEvents() {
 }
 
 G.world = createWorld(SEED);
+G.world.sky.buildEnvironment(renderer);
+setVehicleEnvironment(G.world.sky.state.envMap);
 G.nav = createNavigation(G.world.layout);
 G.input = createInput(canvas);
 G.input.state.testMode = testMode;
@@ -141,8 +144,9 @@ G.resetWorldState = () => {
   G.police.clearAll();
   G.gangs.clear();
   for (const v of [...G.fleet.vehicles]) G.fleet.remove(v);
-  G.missions.reset();
   G.activities.abortAll();
+  for (const m of [...G.markers.list]) G.markers.remove(m);
+  G.missions.reset();
   G.wanted.clear();
   G.hud.setObjective('');
   G.hud.setWaypoint(null);
@@ -170,8 +174,8 @@ G.newGame = () => {
   G.gangs.setHostile(false);
   G.world.sky.setHour(TIME.startHour);
   const L = G.world.layout.landmarks;
-  G.player.revive(L.start.x, L.start.z, Math.PI);
-  G.camera.snapTo(Math.PI, 0.26);
+  G.player.revive(L.start.x, L.start.z, 0);
+  G.camera.snapTo(0, 0.26);
   const park = L.safehouses.strand.park;
   G.fleet.spawn('sedan', park.x, park.z, Math.PI / 2, { color: '#8d99ae', role: 'player', owner: 'player', parked: true });
   G.activities.init();
@@ -338,7 +342,8 @@ let last = performance.now();
 let frames = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(PHYSICS.maxFrame, Math.max(0, (now - last) / 1000));
+  const rawDt = Math.min(1, Math.max(0, (now - last) / 1000));
+  const dt = Math.min(PHYSICS.maxFrame, rawDt);
   last = now;
   frames += 1;
   handleFrameKeys();
@@ -353,7 +358,8 @@ function frame(now) {
     titleCamera(dt);
     G.radio.update(dt, false);
   } else {
-    G.menus.update(dt);
+    // Menu timers (hospital, arrest) run on wall-clock time, not the clamped step.
+    G.menus.update(rawDt);
     G.radio.update(dt, false);
     G.audio.updateEngine(null, dt);
     if (G.state === 'death' || G.state === 'menu') {
@@ -365,7 +371,8 @@ function frame(now) {
   }
   renderer.render(G.world.scene, G.camera.camera);
   G.audio.endFrame();
-  G.input.endFrame(now / 1000);
+  // In test mode the harness advances the simulation itself and consumes the key presses.
+  if (!testMode || G.state !== 'playing') G.input.endFrame(now / 1000);
 }
 
 window.addEventListener('resize', () => {

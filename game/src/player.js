@@ -330,6 +330,12 @@ export function createPlayer(G) {
       if (v.lastImpact.closing > DAMAGE.driverHurtSpeed) p.damage(DAMAGE.driverHurt * (v.spec.open ? 3 : 1), 'crash');
       G.camera.kick(Math.min(1, v.lastImpact.closing / 15));
     }
+    if (v.onFire && !v.fireWarned) {
+      v.fireWarned = true;
+      G.notify('The car is on fire. Get out!');
+      G.hud.banner('GET OUT', 'The car is about to explode', 'failed');
+      G.audio.play('wantedUp');
+    }
     if (v.wrecked) {
       p.damage(DAMAGE.explosionDamage, 'explosion');
       if (!p.dead) p.exitVehicle();

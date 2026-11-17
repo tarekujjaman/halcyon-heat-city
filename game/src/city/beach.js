@@ -111,7 +111,7 @@ export function buildBeach(layout, textures, colliders) {
   const pier = layout.landmarks;
   const px = pier.pier.x;
   const pz1 = pier.pierStart.z;
-  const pz2 = pier.pierEnd.z;
+  const pz2 = pier.pierTip.z;
   const pw = 11;
   wood.box(px - pw / 2, 0.14, pz1, pw, 0.5, pz2 - pz1, '#ffffff', [1.2, 1.2]);
   for (let z = pz1 + 6; z < pz2; z += 8) {

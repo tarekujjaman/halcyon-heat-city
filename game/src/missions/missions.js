@@ -101,6 +101,9 @@ export function createMissions(G) {
         v.driver = null;
         v.ctrl.throttle = 0;
         v.ctrl.brake = 1;
+        v.ctrl.handbrake = true;
+        v.vx *= 0.2;
+        v.vz *= 0.2;
         const ped = G.pedestrians.spawnFleeingDriver(v, { ...LOOKS.gang, scale: 1 });
         ped.panicTimer = 12;
       },

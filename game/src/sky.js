@@ -102,6 +102,42 @@ export function createSky(scene) {
   const ambient = new THREE.AmbientLight('#9a8aa0', 0.35);
   scene.add(ambient);
   scene.fog = new THREE.Fog('#f7bf8c', 240, 900);
+  let envTarget = null;
+  /** A painted sky cube for reflections on glass and paint; needs the renderer, so main calls it once. */
+  function buildEnvironment(renderer) {
+    try {
+      const faces = [];
+      for (let i = 0; i < 6; i += 1) {
+        const c = document.createElement('canvas');
+        c.width = 64;
+        c.height = 64;
+        const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 0, 64);
+        if (i === 2) { grad.addColorStop(0, '#5a8fe0'); grad.addColorStop(1, '#6f9ae8'); } else if (i === 3) { grad.addColorStop(0, '#b89a78'); grad.addColorStop(1, '#8a7560'); } else { grad.addColorStop(0, '#4f86dc'); grad.addColorStop(0.55, '#ffc08a'); grad.addColorStop(0.62, '#d7b596'); grad.addColorStop(1, '#9a8468'); }
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 64, 64);
+        faces.push(c);
+      }
+      const cube = new THREE.CubeTexture(faces);
+      cube.colorSpace = THREE.SRGBColorSpace;
+      cube.needsUpdate = true;
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      envTarget = pmrem.fromCubemap(cube);
+      pmrem.dispose();
+      // Only shiny things reflect it (car paint, glass towers, pools): the diffuse light stays golden.
+      state.envMap = envTarget.texture;
+      scene.traverse((o) => {
+        if (!o.isMesh || !o.material || !o.material.isMeshStandardMaterial) return;
+        if (o.material.metalness >= 0.3 || o.material.roughness <= 0.2) {
+          o.material.envMap = state.envMap;
+          o.material.envMapIntensity = 0.7;
+          o.material.needsUpdate = true;
+        }
+      });
+    } catch {
+      state.envMap = null;
+    }
+  }
 
   const state = {
     hour: TIME.startHour,
@@ -210,6 +246,7 @@ export function createSky(scene) {
     state,
     dome,
     sun,
+    buildEnvironment,
     /** Lights and windows that brighten after dark register here. */
     registerEmissive(list) {
       state.emissive.push(...list);

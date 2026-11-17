@@ -65,25 +65,33 @@ export function createCharacter(look) {
     return p;
   };
   const hips = part(unitBox, look.pants, 0.36, 0.22, 0.24, 0, 0.98, 0);
+  part(unitBox, look.belt || '#2a2016', 0.38, 0.05, 0.26, 0, 1.085, 0);
   const torsoColor = look.jacket || look.shirt;
   const torso = part(unitBox, torsoColor, 0.42, 0.52, 0.26, 0, 1.35, 0);
+  // Shoulders and a collar give the torso a shape.
+  part(unitBox, torsoColor, 0.54, 0.12, 0.27, 0, 1.56, 0);
+  part(unitBox, look.collar || look.skin, 0.2, 0.05, 0.2, 0, 1.63, 0.01);
   if (look.jacket) part(unitBox, look.shirt, 0.16, 0.5, 0.05, 0, 1.35, 0.13);
   if (look.badge) part(unitBox, '#f2c53d', 0.07, 0.07, 0.02, 0.12, 1.45, 0.14);
   const neck = part(unitBox, look.skin, 0.12, 0.1, 0.12, 0, 1.64, 0);
-  const head = part(headGeo, look.skin, 0.26, 0.3, 0.27, 0, 1.82, 0);
+  const head = part(headGeo, look.skin, 0.28, 0.32, 0.29, 0, 1.83, 0);
   // Hair: a cap and, by style, a back fall or a top knot.
   const hairStyle = look.hairStyle ?? 0;
   if (look.hat) {
     part(unitBox, look.hat, 0.3, 0.1, 0.3, 0, 1.95, 0);
     part(unitBox, look.hat, 0.3, 0.03, 0.14, 0, 1.91, 0.2);
   } else if (hairStyle === 0) {
-    part(headGeo, look.hair, 0.28, 0.2, 0.29, 0, 1.9, -0.01);
+    part(headGeo, look.hair, 0.3, 0.2, 0.31, 0, 1.92, -0.01);
   } else if (hairStyle === 1) {
-    part(headGeo, look.hair, 0.29, 0.26, 0.3, 0, 1.9, -0.02);
+    part(headGeo, look.hair, 0.31, 0.27, 0.32, 0, 1.91, -0.02);
   } else {
-    part(headGeo, look.hair, 0.29, 0.24, 0.3, 0, 1.9, -0.02);
-    part(unitBox, look.hair, 0.2, 0.34, 0.12, 0, 1.7, -0.14);
+    part(headGeo, look.hair, 0.31, 0.25, 0.32, 0, 1.91, -0.02);
+    part(unitBox, look.hair, 0.2, 0.34, 0.12, 0, 1.7, -0.15);
   }
+  // Ears and a mouth line.
+  part(unitBox, look.skin, 0.04, 0.07, 0.05, -0.15, 1.82, 0);
+  part(unitBox, look.skin, 0.04, 0.07, 0.05, 0.15, 1.82, 0);
+  part(unitBox, '#7a3b3b', 0.08, 0.015, 0.02, 0, 1.75, 0.14);
   // Eyes.
   part(unitBox, '#111', 0.04, 0.03, 0.02, -0.05, 1.84, 0.13);
   part(unitBox, '#111', 0.04, 0.03, 0.02, 0.05, 1.84, 0.13);

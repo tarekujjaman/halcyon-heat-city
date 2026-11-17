@@ -86,7 +86,7 @@ export function createMapScreen(G, root, canvas, mapImage) {
     ctx.font = 'bold 14px Arial, sans-serif';
     ctx.fillStyle = '#fff';
     ctx.lineWidth = 3;
-    const places = [[L.pier.x, L.pierEnd.z + 14, 'Halcyon Pier'], [L.key.x, L.key.z - 44, 'Pelican Key'], [L.bank.x + 20, L.bank.z - 30, 'Glasswater Mutual'], [L.garage.x, L.garage.z + 14, "Teo's Body Shop"], [L.gangBar.x, L.gangBar.z + 14, 'The Riptide']];
+    const places = [[L.pier.x, L.pierEnd.z + 16, 'Halcyon Pier'], [L.key.x + 60, L.key.z - 30, 'Pelican Key'], [(L.key.x + G.world.layout.causewayX1) / 2 + 30, L.key.z + 22, 'Pelican Causeway'], [L.bank.x + 20, L.bank.z - 30, 'Glasswater Mutual'], [L.garage.x, L.garage.z + 14, "Teo's Body Shop"], [L.gangBar.x, L.gangBar.z + 14, 'The Riptide'], [L.hospital.x, L.hospital.z + 12, 'Bayside Clinic'], [L.policeStation.x, L.policeStation.z + 12, 'HPD']];
     for (const [x, z, t] of places) {
       const [sx, sy] = toScreen(x, z);
       ctx.strokeText(t, sx, sy);
@@ -136,7 +136,7 @@ export function createMapScreen(G, root, canvas, mapImage) {
     // Legend.
     const legend = [['#ffd43b', 'diamond', 'Story mission'], ['#ffd43b', 'dot', 'Objective'], ['#ff6ad5', 'flag', 'Street race'], ['#37f3ff', 'square', 'Paint shop'], ['#8bff6b', 'house', 'Safehouse'], ['#5de0d6', 'diamond', 'Sea-glass shard'], ['#3b6bff', 'dot', 'Police'], ['#c56bff', 'diamond', 'Waypoint']];
     const lx = 18;
-    let ly = canvas.height - 18 - legend.length * 24;
+    let ly = 48;
     ctx.fillStyle = 'rgba(8,14,24,0.78)';
     ctx.fillRect(lx - 10, ly - 30, 190, legend.length * 24 + 44);
     ctx.fillStyle = '#fff';

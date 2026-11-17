@@ -143,12 +143,32 @@ export function createDriver(v, nav, options = {}) {
     const gap = ctx.obstacleGap(v, 6 + Math.abs(v.speed) * 1.3);
     if (gap < Infinity) {
       want = Math.min(want, Math.max(0, (gap - 2.5) * 1.5));
-      ai.stuck += dt;
+      if (Math.abs(v.speed) < 0.5) ai.stuck += dt;
       if (ai.stuck > 2.5 && ai.honk <= 0) {
         ai.honk = 4 + frand() * 4;
         v.horn = 0.4;
       }
-    } else ai.stuck = 0;
+    } else if (Math.abs(v.speed) > 0.5) ai.stuck = 0;
+    // Boxed in for too long: back up a little and try again around the obstacle.
+    ai.reverseTimer = Math.max(0, ai.reverseTimer - dt);
+    if (ai.stuck > 9 && ai.reverseTimer <= 0 && !ai.beforeStop) {
+      ai.reverseTimer = 1.4;
+      ai.stuck = 0;
+      ai.sidestep = frand() < 0.5 ? -1 : 1;
+    }
+    if (ai.reverseTimer > 0 && ai.mode === 'road') {
+      v.ctrl.throttle = 0;
+      v.ctrl.brake = 1;
+      v.ctrl.steer = ai.sidestep || 1;
+      v.ctrl.handbrake = false;
+      return;
+    }
+    if (ai.stuck > 9 && ai.beforeStop) {
+      // Waiting at the box with something dead ahead: creep around it.
+      v.ctrl.steer = (ai.sidestep || 1) * 0.6;
+      want = Math.max(want, 2.5);
+      if (ai.stuck > 16) ai.stuck = 0;
+    }
     ai.honk = Math.max(0, ai.honk - dt);
     if (v.horn > 0) v.horn = Math.max(0, v.horn - dt);
     speedControl(want, dt);

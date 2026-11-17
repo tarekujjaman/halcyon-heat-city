@@ -45,6 +45,7 @@ export function createInput(canvas) {
   });
 
   function onMouseMove(e) {
+    if (typeof e.buttons === 'number') state.buttons = e.buttons;
     state.cursorX = e.clientX;
     state.cursorY = e.clientY;
     state.cursorInside = true;
@@ -52,7 +53,7 @@ export function createInput(canvas) {
       state.mouseDX += e.movementX || 0;
       state.mouseDY += e.movementY || 0;
       state.lastMouseMoveAt = state.now;
-    } else if (state.buttons & 2 || state.buttons & 1 && state.lockRefused) {
+    } else if ((state.buttons & 2) !== 0 || ((state.buttons & 1) !== 0 && state.lockRefused)) {
       // Drag to look when the pointer could not be captured.
       if (state.lastClientX !== null) {
         state.mouseDX += e.clientX - state.lastClientX;
@@ -64,7 +65,7 @@ export function createInput(canvas) {
     state.lastClientY = e.clientY;
   }
   function onMouseDown(e) {
-    state.buttons |= 1 << e.button;
+    state.buttons = e.buttons || (e.button === 2 ? 2 : e.button === 1 ? 4 : 1);
     state.lastClientX = e.clientX;
     state.lastClientY = e.clientY;
     if (e.button === 0) state.clicked = true;
@@ -74,7 +75,7 @@ export function createInput(canvas) {
     }
   }
   function onMouseUp(e) {
-    state.buttons &= ~(1 << e.button);
+    state.buttons = e.buttons || 0;
   }
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mousedown', onMouseDown);

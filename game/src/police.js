@@ -50,7 +50,7 @@ export function createPolice(G) {
 
   function spawnCruiser(spot, options = {}) {
     const v = G.fleet.spawn('cruiser', spot.x, spot.z, spot.yaw, { role: 'police', rng, color: '#ffffff' });
-    const ai = createDriver(v, nav, { limit: 26 + G.wanted.stars * 3, ignoreLights: true, aggressive: true });
+    const ai = createDriver(v, nav, { limit: 22 + G.wanted.stars * 2.5, ignoreLights: true, aggressive: true });
     if (spot.node) ai.reset(spot.node, spot.dir, spot.lane);
     else ai.setRoad();
     v.ai = ai;
@@ -100,6 +100,7 @@ export function createPolice(G) {
   /** Called when the wanted level rises: get units moving at once. */
   function respond() {
     respondTimer = 0;
+    spawnTimer = 0;
   }
 
   function shootAt(o, originY, range, damage, accuracy) {
@@ -214,12 +215,15 @@ export function createPolice(G) {
     label.position.set(1.21, -0.3, 0);
     label.rotation.y = Math.PI / 2;
     g.add(label);
-    const light = new THREE.SpotLight('#fff3c4', 0, 90, 0.26, 0.5, 1);
+    const light = new THREE.SpotLight('#fff3c4', 0, 120, 0.3, 0.5, 1);
     light.position.set(0, -1, 1.5);
     g.add(light);
     g.add(light.target);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(9, 34, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#fff0b0', transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(4.5, 34, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#fff0b0', transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     cone.renderOrder = 4;
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(1.8, 34, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#fff8d8', transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    inner.position.y = 0;
+    cone.add(inner);
     G.world.scene.add(cone);
     const blink = new THREE.PointLight('#ff3030', 0, 20);
     blink.position.set(0, 1.6, -3);
@@ -261,7 +265,7 @@ export function createPolice(G) {
     heli.tailRotor.rotation.x += dt * 50;
     heli.blink.intensity = Math.sin(G.world.time * 8) > 0 ? 6 : 0;
     // Searchlight on Sol.
-    heli.light.intensity = leaving ? 0 : 400;
+    heli.light.intensity = leaving ? 0 : 2600;
     heli.light.target.position.set(p.x - heli.x, p.y - heli.y, p.z - heli.z);
     heli.cone.visible = !leaving;
     const cx = (heli.x + p.x) / 2;
@@ -271,7 +275,7 @@ export function createPolice(G) {
     const len = Math.hypot(p.x - heli.x, p.y - heli.y, p.z - heli.z);
     heli.cone.scale.set(1, len / 34, 1);
     heli.cone.lookAt(p.x, p.y, p.z);
-    heli.cone.rotateX(Math.PI / 2);
+    heli.cone.rotateX(-Math.PI / 2);
     heli.fireTimer -= dt;
     if (!leaving && heli.fireTimer <= 0 && (stars >= 5 || p.state === 'foot' || (p.vehicle && p.vehicle.spec.open))) {
       heli.fireTimer = POLICE.heliInterval;
@@ -336,12 +340,12 @@ export function createPolice(G) {
     const active = cruisers.filter((v) => !v.wrecked && !v.leaving && !v.roadblock);
     if (active.length < wantCruisers && spawnTimer <= 0) {
       const s = G.wanted.search;
-      const spot = nav.randomLaneSpot(rng, s.x, s.z, 70, 120);
+      const spot = nav.randomLaneSpot(rng, s.x, s.z, 70, 130, 40);
       if (spot && G.fleet.spotFree(spot.x, spot.z, 8)) {
         const v = spawnCruiser(spot);
         v.ai.routeTo(s.x, s.z);
-      }
-      spawnTimer = 1.2;
+        spawnTimer = 0.7;
+      } else spawnTimer = 0.2;
     }
     for (let i = cruisers.length - 1; i >= 0; i -= 1) {
       const v = cruisers[i];
@@ -368,7 +372,7 @@ export function createPolice(G) {
       if (sees) v.lostTimer = 0;
       else v.lostTimer += dt;
       if (v.ai) {
-        if ((sees || d < 28) && v.ai.mode !== 'chase') v.ai.setChase(playerTarget, 28 + stars * 3);
+        if ((sees || d < 28) && v.ai.mode !== 'chase') v.ai.setChase(playerTarget, 23 + stars * 2.5);
         else if (v.ai.mode === 'chase' && v.lostTimer > 4 && d > 60) {
           v.ai.setRoad();
           v.ai.routeTo(G.wanted.search.x, G.wanted.search.z);

@@ -31,6 +31,12 @@ export function createActivities(G) {
     a.shardMeshes = [];
     L.shards.forEach((s, i) => {
       if (a.shardsFound.has(i)) return;
+      // Nudge a shard off any post or wall it landed against.
+      if (G.world.colliders.overlaps(s.x, s.z, 0.5)) {
+        for (const [ox, oz] of [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [2.5, 2.5], [-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5]]) {
+          if (!G.world.colliders.overlaps(s.x + ox, s.z + oz, 0.5)) { s.x += ox; s.z += oz; break; }
+        }
+      }
       const mesh = new THREE.Mesh(shardGeo, shardMat);
       mesh.position.set(s.x, G.world.layout.groundHeight(s.x, s.z) + 0.9, s.z);
       mesh.userData.index = i;
@@ -294,13 +300,14 @@ export function createActivities(G) {
 
   function pickSidewalkSpot(x, z, minD, maxD) {
     const nodes = G.world.layout.walk.nodes;
-    for (let tries = 0; tries < 20; tries += 1) {
-      const n = nodes[Math.floor(frand() * nodes.length)];
+    const candidates = [];
+    for (const n of nodes) {
       const d = Math.hypot(n.x - x, n.z - z);
-      if (d < minD || d > maxD) continue;
-      return { x: n.x, z: n.z };
+      if (d >= minD && d <= maxD) candidates.push(n);
     }
-    return null;
+    if (!candidates.length) return null;
+    const n = candidates[Math.floor(frand() * candidates.length)];
+    return { x: n.x, z: n.z };
   }
 
   function pickUpFare() {
@@ -363,6 +370,10 @@ export function createActivities(G) {
     updateTaxi(dt);
   };
   a.init = () => {
+    for (const m of [...a.shopMarkers, ...a.safehouseMarkers, ...a.raceMarkers]) G.markers.remove(m);
+    a.shopMarkers = [];
+    a.safehouseMarkers = [];
+    a.raceMarkers = [];
     placeShards();
     placeShops();
     placeSafehouses();

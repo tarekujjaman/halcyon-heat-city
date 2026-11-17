@@ -213,11 +213,12 @@ export function collidePair(a, b, pairTimers, now) {
     b.yawKick = (b.yawKick || 0) + lat(b, -deepest.nx, -deepest.nz) * (deepest.tb > 0 ? 1 : -1) * kick * (ma / mb);
     const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
     const last = pairTimers.get(key) || -Infinity;
-    if (closing >= DAMAGE.scrapeSpeed && now - last >= DAMAGE.impactCooldown) {
+    if (closing >= DAMAGE.scrapeSpeed && now - last >= DAMAGE.pairCooldown) {
       pairTimers.set(key, now);
-      const dmg = Math.min(DAMAGE.crashMax, (closing - DAMAGE.scrapeSpeed) * DAMAGE.crashScale);
-      damageVehicle(a, dmg * Math.min(1.5, mb / ma), b);
-      damageVehicle(b, dmg * Math.min(1.5, ma / mb), a);
+      // Car-to-car hits hurt less than walls: bodywork gives, and a chase should last.
+      const dmg = Math.min(DAMAGE.crashMax * 0.6, (closing - DAMAGE.scrapeSpeed) * DAMAGE.crashScale * DAMAGE.carToCar);
+      damageVehicle(a, dmg * Math.min(1.3, mb / ma), b);
+      damageVehicle(b, dmg * Math.min(1.3, ma / mb), a);
       a.lastImpact = { closing, dmg, at: now, other: b };
       b.lastImpact = { closing, dmg, at: now, other: a };
       return closing;

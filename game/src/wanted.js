@@ -35,8 +35,17 @@ export function createWanted(G) {
     }
   }
 
+  /** Is anyone around to see a crime here: a pedestrian close by, or a police unit in range? */
+  w.witnessed = (x, z) => {
+    for (const ped of G.pedestrians.list) if (!ped.dead && Math.hypot(ped.x - x, ped.z - z) < 36) return true;
+    for (const v of G.police.cruisers) if (!v.wrecked && Math.hypot(v.x - x, v.z - z) < 70) return true;
+    for (const o of G.police.officers) if (!o.dead && Math.hypot(o.x - x, o.z - z) < 50) return true;
+    return !!G.police.heli;
+  };
+
   w.crime = (type, x = G.player.x, z = G.player.z) => {
-    const value = WANTED.crimes[type] || 0;
+    let value = WANTED.crimes[type] || 0;
+    if (type === 'shoot' && !w.witnessed(x, z)) value = WANTED.crimes.shootUnseen;
     w.heat += value;
     w.lastCrime = type;
     w.search.x = x;

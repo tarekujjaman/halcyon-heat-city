@@ -85,8 +85,19 @@ export function buildRoads(layout, textures, colliders) {
   for (let z = zTop + 6; z < zBottom; z += 14) {
     concreteBatch.cylinder(q + 1.6, 0.3, z, 0.35, 0.3, 0.7, 6, '#3b3b3b');
   }
-  // Sea walls: nothing drives into the water. Beach shoreline wall and the quay's south end.
-  colliders.addBox(layout.quayX - 40, layout.shoreZ + 3, CITY.x0 + CITY.width + 80, layout.shoreZ + 6, 3, 'sea');
+  // Sea walls: nothing drives into the water. Beach shoreline wall (open at the pier) and the quay's south end.
+  const pier = layout.pier;
+  colliders.addBox(layout.quayX - 40, layout.shoreZ + 3, pier.x - pier.halfW, layout.shoreZ + 6, 3, 'sea');
+  colliders.addBox(pier.x + pier.halfW, layout.shoreZ + 3, CITY.x0 + CITY.width + 80, layout.shoreZ + 6, 3, 'sea');
+  // Pelican Key rim: a ring of short walls, open where the causeway arrives.
+  for (let k = 0; k < 36; k += 1) {
+    const a0 = (k / 36) * Math.PI * 2;
+    const a1 = ((k + 1) / 36) * Math.PI * 2;
+    const mx = key.x + Math.cos((a0 + a1) / 2) * (key.r - 0.6);
+    const mz = key.z + Math.sin((a0 + a1) / 2) * (key.r - 0.6);
+    if (Math.abs(mz - key.z) < half + 2 && mx > key.x) continue;
+    colliders.addBox(mx - 3.2, mz - 3.2, mx + 3.2, mz + 3.2, 1.2, 'sea');
+  }
   colliders.addBox(q - 40, zTop - 40, q, layout.oceanZ - half - 2, 3, 'sea');
   colliders.addBox(q - 40, layout.oceanZ + half + 2, q, layout.shoreZ + 6, 3, 'sea');
   colliders.addBox(layout.causewayX2 - 6, layout.oceanZ - half - 1.6, layout.causewayX2 - 2, layout.oceanZ + half + 1.6, 0, 'none');

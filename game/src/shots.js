@@ -68,18 +68,20 @@ export async function stageShot(name, G) {
     G.traffic.spawnCar({ x: x0 + 48, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 1 }, 'taxi');
     G.traffic.spawnCar({ x: x0 + 70, z: layout.oceanZ + 1.75, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 0 }, 'sedan');
     G.traffic.spawnCar({ x: x0 - 70, z: layout.oceanZ - 5.25, yaw: -Math.PI / 2, node: G.nav.node(3, 9), dir: 'w', lane: 1 }, 'van');
-    const from = { x: x0, z };
+    const from = { x: x0 + 6, z };
     crowd(G, [
-      [x0 - 6, layout.oceanZ - 9, true], [x0 - 11, layout.oceanZ - 8.5, true], [x0 + 4, layout.oceanZ - 9.5, true], [x0 + 12, layout.oceanZ - 8.8, false],
-      [x0 - 2, layout.boardwalkZ + 2.5, true], [x0 + 9, layout.boardwalkZ + 4, true], [x0 + 18, layout.boardwalkZ + 3, false], [x0 - 14, layout.boardwalkZ + 3.5, true], [x0 + 26, layout.boardwalkZ + 2, false],
+      [x0 - 15, layout.oceanZ - 9, false], [x0 - 19, layout.oceanZ - 8.4, false], [x0 - 9, layout.oceanZ - 9.6, true], [x0 + 2, layout.oceanZ - 8.8, false], [x0 + 10, layout.oceanZ - 9.2, true],
+      [x0 - 14, layout.boardwalkZ + 2.5, true], [x0 - 6, layout.boardwalkZ + 4, true], [x0 + 4, layout.boardwalkZ + 3, false], [x0 - 22, layout.boardwalkZ + 3.5, false], [x0 + 14, layout.boardwalkZ + 2, false], [x0 - 26, layout.boardwalkZ + 2.2, false],
     ], from);
+    // Bystanders who stay put and watch the chase go by.
+    for (const ped of G.pedestrians.list) if (ped.state === 'walk') { ped.state = 'wait'; ped.waitTimer = 30; ped.yaw = Math.atan2(x0 - ped.x, z - ped.z); }
     const cruisers = [];
-    for (const [dx, dz] of [[14, 0.2], [21, -3.4], [27, 3.2]]) {
+    for (const [dx, dz] of [[11, -3.6], [17, 0.8], [24, -3.0], [31, 4.0]]) {
       const c = G.police.spawnCruiser({ x: x0 + dx, z: z + dz, yaw: -Math.PI / 2 });
       c.vx = -20;
       cruisers.push(c);
     }
-    G.wanted.setStars(3);
+    G.wanted.setStars(4);
     G.wanted.search.x = x0 + 40;
     G.wanted.search.z = z + 20;
     G.wanted.search.r = 95;
@@ -93,12 +95,15 @@ export async function stageShot(name, G) {
     drive(G, 0.2, [KEYS.forward, KEYS.right]);
     for (const c of cruisers) c.siren = true;
     const v = G.player.vehicle;
-    G.police.summonHeli(v.x + 22, v.z - 6);
-    G.police.heli.y = 12.5;
+    G.police.summonHeli(v.x + 30, v.z + 1.5);
+    G.police.heli.y = 13.5;
+    G.police.heli.angle = Math.PI;
     G.simulate(0.06, 1 / 60);
-    // Camera ahead of the coupe (west, by the road's direction) on the sea side, looking back east.
-    const camPos = { x: v.x - 11, y: v.y + 2.3, z: v.z + 5 };
-    const look = { x: v.x + 7, y: v.y + 2.6, z: v.z - 0.5 };
+    // Camera ahead of the coupe (west, by the road's direction) on the sea side, low, looking back east.
+    const camPos = { x: v.x - 10.2, y: v.y + 2.1, z: v.z + 4.4 };
+    const look = { x: v.x + 7, y: v.y + 3.1, z: v.z - 1.8 };
+    G.camera.camera.fov = 56;
+    G.camera.camera.updateProjectionMatrix();
     placeCamera(G, camPos, look);
     finish();
     return;
@@ -123,10 +128,12 @@ export async function stageShot(name, G) {
     G.traffic.spawnCar({ x: b.x - 26, z: b.z + 20.5, yaw: Math.PI / 2, node: G.nav.node(8, 4), dir: 'e', lane: 0 }, 'coupe');
     G.traffic.spawnCar({ x: b.x + 24, z: b.z + 14.5, yaw: -Math.PI / 2, node: G.nav.node(8, 4), dir: 'w', lane: 1 }, 'taxi');
     G.camera.snapTo(Math.PI, 0.16);
+    G.camera.update(0.016, G.player.focus(new THREE.Vector3()), 'foot', null, G.input, G.world.colliders, window.innerWidth);
     G.simulate(0.7, 1 / 60);
     G.player.aimTimer = 3;
-    G.player.yaw = Math.PI;
     G.camera.snapTo(Math.PI + 0.22, 0.14);
+    G.camera.update(0.016, G.player.focus(new THREE.Vector3()), 'foot', null, G.input, G.world.colliders, window.innerWidth);
+    G.player.yaw = Math.PI + 0.22;
     G.simulate(0.02, 1 / 60);
     G.weapons.cooldown = 0;
     G.weapons.fire();
@@ -179,6 +186,61 @@ export async function stageShot(name, G) {
     placeCamera(G, cam, { x: car.x + 10, y: 12, z: car.z - 30 });
     finish();
     G.menus.showMissionComplete({ def: bank, money: 5000, rep: 80, levelUp: true, next: tide, finale: false });
+    return;
+  }
+
+  if (name === 'newgame') {
+    // The first seconds of a new game, exactly as a player sees them (help card included).
+    G.hud.showHelp(true);
+    G.simulate(1.5, 1 / 60);
+    G.camera.update(0.016, G.player.focus(new THREE.Vector3()), 'foot', null, G.input, G.world.colliders, window.innerWidth);
+    G.hud.update(0.016);
+    return;
+  }
+
+  if (name === 'vehicles') {
+    // Every vehicle type lined up on Ocean Drive for review.
+    const z = layout.oceanZ + 3;
+    const types = ['coupe', 'sedan', 'taxi', 'pickup', 'van', 'cruiser', 'bike'];
+    let x = layout.roadX(4) - 18;
+    G.world.sky.setHour(17.3);
+    for (const t of types) {
+      const v = G.fleet.spawn(t, x, z, Math.PI / 2 + 0.5, { role: 'test' });
+      if (t === 'cruiser') v.siren = true;
+      x += 6.5;
+    }
+    G.player.revive(layout.roadX(4) - 24, z - 6, 0);
+    G.simulate(0.3, 1 / 60);
+    placeCamera(G, { x: layout.roadX(4) + 4, y: 3.2, z: z + 13 }, { x: layout.roadX(4) + 2, y: 0.8, z: z });
+    finish();
+    return;
+  }
+
+  if (name === 'cast') {
+    // Everyone in the cast, close up, for reviewing the figures.
+    const p = L.plaza;
+    G.world.sky.setHour(17.4);
+    G.player.revive(p.x, p.z, Math.PI);
+    const looks = ['teo', 'dani', 'kane', 'ruiz', 'officer', 'gang'];
+    let x = p.x - 5;
+    for (const key of looks) {
+      const { createCharacter, LOOKS } = await import('./characters.js');
+      const model = createCharacter(LOOKS[key]);
+      model.group.position.set(x, G.world.layout.groundHeight(x, p.z - 2.5), p.z - 2.5);
+      model.group.rotation.y = Math.PI;
+      model.animateIdle(x);
+      G.world.scene.add(model.group);
+      x += 2;
+    }
+    for (let i = 0; i < 6; i += 1) {
+      const ped = G.pedestrians.makePed(p.x - 5 + i * 2, p.z - 5.5);
+      ped.state = 'wait';
+      ped.waitTimer = 99;
+      ped.yaw = Math.PI;
+    }
+    G.simulate(0.5, 1 / 60);
+    placeCamera(G, { x: p.x + 1, y: 1.9, z: p.z + 6 }, { x: p.x + 1, y: 1.1, z: p.z - 3 });
+    finish();
     return;
   }
 

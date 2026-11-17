@@ -193,11 +193,12 @@ export function buildLayout(seed) {
 
   const landmarks = buildLandmarks(blockMap, oceanZ, boardwalkZ, shoreZ, key);
 
+  const pier = { x: roadX(5), halfW: 5.5, z1: boardwalkZ + 1, z2: shoreZ + 110, deck: 0.64 };
   const layout = {
     seed, rng, blocks, blockMap, lots, intersections, roads,
-    oceanZ, boardwalkZ, sandZ, shoreZ, quayX, causewayX1, causewayX2, key,
+    oceanZ, boardwalkZ, sandZ, shoreZ, quayX, causewayX1, causewayX2, key, pier,
     walk, landmarks,
-    bounds: { minX: quayX - 2, maxX: roadX(CITY.blocksX) + 60, minZ: roadZ(0) - 60, maxZ: shoreZ + 4 },
+    bounds: { minX: causewayX2 - 90, maxX: roadX(CITY.blocksX) + 60, minZ: roadZ(0) - 60, maxZ: shoreZ + 116 },
     colliders: { boxes: [], circles: [] },
     roadX, roadZ,
     blockAt: (bx, bz) => blockMap.get(`${bx},${bz}`) || null,
@@ -240,7 +241,12 @@ function isRoad(L, x, z) {
   return blockOf(L, x, z) === null;
 }
 
+function onPier(L, x, z) {
+  return Math.abs(x - L.pier.x) < L.pier.halfW && z >= L.pier.z1 && z <= L.pier.z2;
+}
+
 function isWater(L, x, z) {
+  if (onPier(L, x, z)) return false;
   if (z > L.shoreZ) return !(Math.hypot(x - L.key.x, z - L.key.z) < L.key.r);
   if (x < L.quayX) {
     if (Math.hypot(x - L.key.x, z - L.key.z) < L.key.r) return false;
@@ -251,6 +257,7 @@ function isWater(L, x, z) {
 }
 
 function groundHeight(L, x, z) {
+  if (onPier(L, x, z)) return L.pier.deck;
   if (z > L.sandZ && z <= L.shoreZ + 20) {
     const t = Math.min(1, Math.max(0, (z - L.sandZ) / CITY.beachWidth));
     return 0.12 - 0.62 * t * t;
@@ -327,14 +334,15 @@ function buildLandmarks(blockMap, oceanZ, boardwalkZ, shoreZ, key) {
   const landmarks = {
     garage: { ...front(garage, 'south'), yaw: Math.PI, name: "Teo's Body Shop", block: garage, lot: { x: garage.x + 6, z: garage.z + 30, w: garage.w - 12, d: 20 } },
     garageParking: { x: garage.cx, z: garage.z + 40, yaw: 0 },
-    plaza: { x: plaza.cx, z: plaza.cz, name: 'Glasswater Plaza', block: plaza },
+    plaza: { x: plaza.cx, z: plaza.cz + 14, name: 'Glasswater Plaza', block: plaza },
     bank: { ...front(bank, 'west'), name: 'Glasswater Mutual', block: bank },
-    bankDoor: { x: bank.x + CITY.sidewalk + 5.5, z: bank.cz },
+    bankDoor: { x: bank.x + CITY.sidewalk + 1.2, z: bank.cz },
     bankRoad: roadSpot(bank, 'west'),
     gangBar: { ...front(bar, 'south'), name: 'The Riptide', block: bar },
     gangBarRoad: roadSpot(bar, 'south'),
     pier: { x: pierX, z: shoreZ + 40, name: 'Halcyon Pier' },
-    pierEnd: { x: pierX, z: shoreZ + 110 },
+    pierEnd: { x: pierX, z: shoreZ + 106 },
+    pierTip: { x: pierX, z: shoreZ + 110 },
     pierStart: { x: pierX, z: boardwalkZ + 3 },
     key: { x: key.x, z: key.z, name: 'Pelican Key' },
     lighthouse: { x: key.x - 6, z: key.z - 8 },
@@ -364,7 +372,7 @@ function buildLandmarks(blockMap, oceanZ, boardwalkZ, shoreZ, key) {
     taxiStand: { x: roadX(5) + 1.75 + 3.5, z: roadZ(2) + 20 },
     hospital: { ...front(b(3, 5), 'south'), name: 'Bayside Clinic' },
     policeStation: { ...front(b(6, 4), 'south'), name: 'HPD Glasswater' },
-    start: { ...front(strand, 'south'), yaw: 0 },
+    start: { x: front(strand, 'south').x + 8, z: front(strand, 'south').z, yaw: 0 },
     races: [
       { id: 'coast', name: 'Coast Run', start: { i: 1, j: 9 }, checkpoints: [[3, 9], [6, 9], [9, 9], [9, 6], [7, 6], [7, 8], [4, 8], [1, 8], [1, 9]] },
       { id: 'downtown', name: 'Glasswater Loop', start: { i: 3, j: 2 }, checkpoints: [[6, 2], [6, 5], [3, 5], [3, 2], [6, 2], [6, 5], [3, 5], [3, 2]] },
@@ -374,7 +382,7 @@ function buildLandmarks(blockMap, oceanZ, boardwalkZ, shoreZ, key) {
   };
   const shardSpots = [
     [2, 8, 'se'], [4, 6, 'nw'], [9, 7, 'sw'], [3, 7, 'ne'], [7, 7, 'se'], [1, 6, 'nw'],
-    [4, 3, 'c'], [6, 2, 'ne'], [3, 4, 'sw'], [5, 5, 'se'],
+    [4, 3, 'p'], [6, 2, 'ne'], [3, 4, 'sw'], [5, 5, 'se'],
     [8, 2, 'nw'], [9, 4, 'ne'], [7, 5, 'sw'],
     [3, 0, 'ne'], [7, 1, 'c'], [9, 0, 'se'],
     [0, 1, 'nw'], [1, 3, 'sw'], [0, 5, 'se'],
@@ -382,14 +390,14 @@ function buildLandmarks(blockMap, oceanZ, boardwalkZ, shoreZ, key) {
   ];
   for (const spot of shardSpots) {
     if (spot[0] === 'pier') {
-      landmarks.shards.push({ x: pierX + 3, z: shoreZ + 100 });
+      landmarks.shards.push({ x: pierX + 3.5, z: shoreZ + 88 });
       continue;
     }
     const bl = b(spot[0], spot[1]);
     const inset = CITY.sidewalk / 2;
     const corner = spot[2];
-    const pos = corner === 'c' ? { x: bl.cx + 3, z: bl.cz + 3 }
-      : { x: corner.includes('w') ? bl.x + inset : bl.x + bl.w - inset, z: corner.includes('n') ? bl.z + inset : bl.z + bl.d - inset };
+    const pos = corner === 'c' ? { x: bl.cx + 3, z: bl.cz + 3 } : corner === 'p' ? { x: bl.cx + 13, z: bl.cz + 13 }
+      : { x: corner.includes('w') ? bl.x + inset + 1.5 : bl.x + bl.w - inset - 1.5, z: corner.includes('n') ? bl.z + inset + 1.5 : bl.z + bl.d - inset - 1.5 };
     landmarks.shards.push(pos);
   }
   return landmarks;

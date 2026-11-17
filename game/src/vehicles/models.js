@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { MeshBatch } from '../city/batch.js';
 
 export const VEHICLE_SPECS = {
-  coupe: { name: 'Vega GT', length: 4.4, width: 1.9, height: 1.25, mass: 1250, maxSpeed: 58, accel: 8.2, brake: 14, grip: 1.0, turn: 1.0, open: false, seatY: 0.55, colors: ['#e63946', '#f4a261', '#2a9d8f', '#ffffff', '#1d3557', '#ffd166', '#7b2cbf'] },
+  coupe: { name: 'Vega GT', length: 4.4, width: 1.9, height: 1.25, mass: 1250, maxSpeed: 58, accel: 9.8, brake: 14, grip: 1.0, turn: 1.0, open: false, seatY: 0.55, colors: ['#e63946', '#f4a261', '#2a9d8f', '#ffffff', '#1d3557', '#ffd166', '#7b2cbf'] },
   sedan: { name: 'Marlin Sedan', length: 4.7, width: 1.85, height: 1.45, mass: 1450, maxSpeed: 46, accel: 5.6, brake: 12, grip: 0.95, turn: 0.9, open: false, seatY: 0.6, colors: ['#8d99ae', '#ffffff', '#1b263b', '#b56576', '#6d6875', '#cdb4db', '#a7c957'] },
   taxi: { name: 'Bayline Taxi', length: 4.7, width: 1.85, height: 1.45, mass: 1450, maxSpeed: 44, accel: 5.4, brake: 12, grip: 0.95, turn: 0.9, open: false, seatY: 0.6, colors: ['#f6c800'] },
   pickup: { name: 'Dockhand Pickup', length: 5.3, width: 2.0, height: 1.7, mass: 1900, maxSpeed: 40, accel: 5.0, brake: 11, grip: 0.9, turn: 0.8, open: false, seatY: 0.8, colors: ['#9a3b3b', '#2f4858', '#c9c9c9', '#4f6d7a', '#d08c60'] },
@@ -15,10 +15,22 @@ export const VEHICLE_SPECS = {
 };
 
 const paintCache = new Map();
+let environment = null;
+/** The sky reflection for every paint material, set once by main. */
+export function setVehicleEnvironment(envMap) {
+  environment = envMap;
+  for (const m of paintCache.values()) {
+    m.envMap = envMap;
+    m.envMapIntensity = 0.75;
+    m.needsUpdate = true;
+  }
+  glassMat.envMap = envMap;
+  glassMat.needsUpdate = true;
+}
 function paint(color) {
   let m = paintCache.get(color);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.32 });
+    m = new THREE.MeshStandardMaterial({ color, metalness: 0.35, roughness: 0.3, envMap: environment, envMapIntensity: 0.75 });
     paintCache.set(color, m);
   }
   return m;

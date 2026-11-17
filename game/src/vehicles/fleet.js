@@ -153,7 +153,7 @@ export function createFleet(world, effects) {
         for (const side of [-1, 1]) {
           const px = v.x + fx * back + rx * side * v.spec.width * 0.45;
           const pz = v.z + fz * back + rz * side * v.spec.width * 0.45;
-          if (frand() < dt * 50) effects.smoke(px, v.y + 0.2, pz, { size: 1.5 + frand(), color: '#e8e8ee', life: 1.1, vy: 0.5, vx: -v.vx * 0.05, vz: -v.vz * 0.05 });
+          if (frand() < dt * 45) effects.smoke(px, v.y + 0.2, pz, { size: 1.0 + frand() * 0.7, color: '#e8e8ee', life: 0.9, vy: 0.5, vx: -v.vx * 0.05, vz: -v.vz * 0.05, grow: 2.2, fade: 0.5 });
         }
         v.drifting = true;
       } else {
