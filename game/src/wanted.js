@@ -1,6 +1,7 @@
 // The wanted level: crimes add heat, heat makes stars (1 to 5), the police search circle on the
 // minimap follows the last place they saw Sol, and stars fade only while she stays out of sight,
-// faster once she has left the circle. Arrests and hospital trips clear it.
+// faster once she has left the circle; a lost star takes its heat with it, so the next small
+// crime does not bring it straight back. Arrests and hospital trips clear it.
 import { WANTED } from './config.js';
 
 export function createWanted(G) {
@@ -18,7 +19,11 @@ export function createWanted(G) {
   function setStars(n, announce = true) {
     const before = w.stars;
     w.stars = Math.max(0, Math.min(WANTED.maxStars, n));
-    w.heat = w.stars > 0 ? Math.max(w.heat, WANTED.starHeat[w.stars]) : 0;
+    // Heat climbs with the stars but never stays above a star that was lost: after a star fades
+    // the heat is exactly that count's threshold, so a small crime adds only its own weight.
+    if (w.stars === 0) w.heat = 0;
+    else if (w.stars < before) w.heat = WANTED.starHeat[w.stars];
+    else w.heat = Math.max(w.heat, WANTED.starHeat[w.stars]);
     if (w.stars !== before) {
       w.evadeTimer = WANTED.evadeSeconds[w.stars];
       w.flash = 1.2;

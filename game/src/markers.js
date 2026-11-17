@@ -1,6 +1,7 @@
 // World markers: the glowing rings and light columns that mark mission starts, objectives,
-// race checkpoints, shops and safehouses, with the trigger when Sol (on foot or driving) enters one,
-// and the blips the minimap and map draw for them.
+// race checkpoints, shops and safehouses, with the trigger when Sol is inside one in the right
+// mode (on foot or driving, also after changing mode inside the ring), the hint when she is in
+// the wrong one, and the blips the minimap and map draw for them.
 import * as THREE from 'three';
 
 const ringGeo = new THREE.CylinderGeometry(1, 1, 0.5, 28, 1, true);
@@ -29,7 +30,8 @@ export function createMarkers(G) {
     const m = {
       x, z, radius: options.radius || 3, color: options.color || '#ffd43b', kind: options.kind || 'objective', label: options.label || '',
       needVehicle: !!options.needVehicle, needFoot: !!options.needFoot, onEnter: options.onEnter || null, beam: options.beam !== false,
-      inside: false, group: new THREE.Group(), t: Math.random() * 6, hidden: false, blip: options.blip !== false, once: options.once !== false,
+      // inside: fired for the current stay; hinted: the wrong-mode hint was shown for this stay.
+      inside: false, hinted: false, group: new THREE.Group(), t: Math.random() * 6, hidden: false, blip: options.blip !== false, once: options.once !== false,
     };
     const mats = matFor(m.color);
     const ring = new THREE.Mesh(ringGeo, mats.ring);
@@ -57,6 +59,11 @@ export function createMarkers(G) {
     m.removed = true;
   }
 
+  /** Is the player in the mode this marker asks for (any mode when it asks for none)? */
+  function modeOk(m, inCar) {
+    return (!m.needVehicle || inCar) && (!m.needFoot || !inCar);
+  }
+
   function update(dt) {
     const p = G.player;
     const inCar = p.state === 'car';
@@ -71,24 +78,31 @@ export function createMarkers(G) {
       }
       m.group.visible = true;
       const d = Math.hypot(p.x - m.x, p.z - m.z);
-      const okMode = (!m.needVehicle || inCar) && (!m.needFoot || !inCar);
       const within = d < m.radius + (inCar ? 1.2 : 0.4);
-      if (within && !m.inside) {
-        m.inside = true;
-        if (okMode && m.onEnter && !p.dead) {
-          m.onEnter(m);
-          if (m.once) remove(m);
-        } else if (within && !okMode && m.onEnter) {
-          G.hud.hint(m.needVehicle ? 'You need a car for this' : 'Get out of the car first');
-        }
-      } else if (!within && m.inside) {
+      if (!within) {
+        // Leaving the ring re-arms it for the next visit.
         m.inside = false;
+        m.hinted = false;
+        continue;
+      }
+      if (!m.onEnter || p.dead) continue;
+      if (modeOk(m, inCar)) {
+        // Fires on entering in the right mode, and on changing to it while still inside: a
+        // mission start reached by car triggers the moment Sol steps out within the ring.
+        if (m.inside) continue;
+        m.inside = true;
+        m.onEnter(m);
+        if (m.once) remove(m);
+      } else if (!m.hinted) {
+        m.hinted = true;
+        m.inside = false;
+        G.hud.hint(m.needVehicle ? 'You need a car for this' : 'Get out of the car first');
       }
     }
   }
 
   return {
-    list, add, remove, update,
+    list, add, remove, update, modeOk,
     clearKind(kind) {
       for (const m of [...list]) if (m.kind === kind) remove(m);
     },
