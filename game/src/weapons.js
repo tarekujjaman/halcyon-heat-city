@@ -1,16 +1,30 @@
-// The arsenal: fists, pistol, SMG and shotgun with ammo and clips, weapon switching by number
-// keys and mouse wheel, reputation unlocks, firing with spread and pellets, muzzle flash, tracers
-// and the crime each shot is. Hits are resolved by combat.js.
+// Sol's arsenal: fists, pistol, SMG and shotgun with ammo and clips, switching by number keys and
+// mouse wheel, reputation unlocks, firing with spread and pellets, reloads, the muzzle flash and
+// tracers, and the crime each shot is. Hits are resolved by combat.js. Exports createWeapons(G),
+// whose state is saved and restored with the run.
 import * as THREE from 'three';
-import { WEAPONS } from './config.js';
+import { GUNPLAY, WEAPONS } from './config.js';
 import { KEYS } from './input.js';
 import { createGunMesh } from './characters.js';
 import { frand } from './rng.js';
 
+/** Slot order for the number keys and the mouse wheel. */
 const ORDER = ['fists', 'pistol', 'smg', 'shotgun'];
+/** How far ahead of the chest a shot starts, and how far ahead of that the flash sits. */
+const MUZZLE_FORWARD = 0.5;
+const FLASH_FORWARD = 0.3;
+const CHEST_HEIGHT = 1.4;
+// Scratch vectors: firing allocates nothing per pellet.
 const origin = new THREE.Vector3();
 const dir = new THREE.Vector3();
+const pellet = new THREE.Vector3();
+const endPoint = new THREE.Vector3();
 
+/**
+ * The weapon system: {inv, current, cooldown, reloading, give, select, cycle, canUnlock, reload,
+ * fire, update, serialize, restore, ammoText, ORDER}. `inv[id]` is {owned, ammo, clip}; fists are
+ * always owned with infinite ammo.
+ */
 export function createWeapons(G) {
   const inv = {
     fists: { owned: true, ammo: Infinity, clip: Infinity },
@@ -27,12 +41,13 @@ export function createWeapons(G) {
     G.player.model.setWeapon(w.current === 'fists' ? null : createGunMesh(w.current));
   }
 
+  /** Hand Sol weapon `id` with `ammo` rounds (capped at a few times its spec), loading the first clip; a new weapon is equipped. */
   w.give = (id, ammo = 0) => {
     const slot = inv[id];
     if (!slot) return;
     const was = slot.owned;
     slot.owned = true;
-    slot.ammo = Math.min(WEAPONS[id].ammo * 3, slot.ammo + ammo);
+    slot.ammo = Math.min(WEAPONS[id].ammo * GUNPLAY.ammoCapMultiplier, slot.ammo + ammo);
     if (slot.clip === 0 && slot.ammo > 0) {
       const take = Math.min(WEAPONS[id].clip, slot.ammo);
       slot.clip = take;
@@ -44,6 +59,7 @@ export function createWeapons(G) {
     }
   };
 
+  /** Equip weapon `id` if owned (no-op for an unknown, unowned or already current one). */
   w.select = (id) => {
     if (!inv[id] || !inv[id].owned || w.current === id) return;
     w.current = id;
@@ -53,19 +69,23 @@ export function createWeapons(G) {
     G.hud.flashWeapon();
   };
 
+  /** Step through the owned weapons by `step` (+1 / -1), wrapping around. */
   w.cycle = (step) => {
     const owned = ORDER.filter((id) => inv[id].owned);
+    if (!owned.length) return;
     const i = owned.indexOf(w.current);
     w.select(owned[(i + step + owned.length) % owned.length]);
   };
 
+  /** Has Sol the reputation Teo's asks for weapon `id`? */
   w.canUnlock = (id) => G.economy.repLevel() >= WEAPONS[id].unlockRep;
 
+  /** Start a reload of the current gun if it needs one and ammo is left. */
   w.reload = () => {
     const slot = inv[w.current];
     const spec = WEAPONS[w.current];
     if (w.current === 'fists' || slot.clip >= spec.clip || slot.ammo <= 0 || w.reloading > 0) return;
-    w.reloading = 1.1;
+    w.reloading = GUNPLAY.reloadSeconds;
     G.audio.play('reload');
   };
 
@@ -78,13 +98,16 @@ export function createWeapons(G) {
     slot.ammo -= take;
   }
 
-  /** One shot (or punch) from the player, aimed where the camera looks. */
+  /**
+   * One shot (or punch) from the player, aimed where the camera looks: every pellet is a ray
+   * resolved by combat, with a tracer to where it landed. A burst counts as one 'shoot' crime.
+   */
   w.fire = () => {
     const spec = WEAPONS[w.current];
     const p = G.player;
     if (w.current === 'fists') {
-      p.punchTimer = 0.4;
-      p.aimTimer = 1.2;
+      p.punchTimer = GUNPLAY.punchSeconds;
+      p.aimTimer = GUNPLAY.aimAfterPunch;
       G.audio.play('punch');
       G.combat.meleeAttack(p, spec.damage, spec.range);
       w.cooldown = spec.rate;
@@ -95,43 +118,44 @@ export function createWeapons(G) {
       if (slot.ammo > 0) w.reload();
       else {
         G.audio.play('empty');
-        w.cooldown = 0.3;
+        w.cooldown = GUNPLAY.emptyClickCooldown;
       }
       return;
     }
     slot.clip -= 1;
     w.shotsFired += 1;
     w.cooldown = spec.rate;
-    p.aimTimer = 2.5;
+    p.aimTimer = GUNPLAY.aimAfterShot;
     G.camera.aimRay(dir);
     // Fire from the chest toward where the crosshair points.
-    origin.set(p.x, p.y + 1.4, p.z).addScaledVector(dir, 0.5);
-    const mx = origin.x + dir.x * 0.3;
+    origin.set(p.x, p.y + CHEST_HEIGHT, p.z).addScaledVector(dir, MUZZLE_FORWARD);
+    const mx = origin.x + dir.x * FLASH_FORWARD;
     const my = origin.y;
-    const mz = origin.z + dir.z * 0.3;
+    const mz = origin.z + dir.z * FLASH_FORWARD;
     G.effects.muzzleFlash(mx, my, mz, dir.x, dir.y, dir.z);
     G.audio.play(w.current === 'shotgun' ? 'shotgun' : w.current === 'smg' ? 'smg' : 'pistol');
-    G.camera.kick(w.current === 'shotgun' ? 0.35 : 0.12);
+    G.camera.kick(w.current === 'shotgun' ? GUNPLAY.kickShotgun : GUNPLAY.kickGun);
     for (let i = 0; i < spec.pellets; i += 1) {
-      const d = dir.clone();
-      d.x += (frand() - 0.5) * spec.spread * 2;
-      d.y += (frand() - 0.5) * spec.spread * 2;
-      d.z += (frand() - 0.5) * spec.spread * 2;
-      d.normalize();
-      const hit = G.combat.shoot(origin, d, spec.range, spec.damage, p);
-      const end = hit ? hit.point : origin.clone().addScaledVector(d, spec.range);
+      pellet.copy(dir);
+      pellet.x += (frand() - 0.5) * spec.spread * 2;
+      pellet.y += (frand() - 0.5) * spec.spread * 2;
+      pellet.z += (frand() - 0.5) * spec.spread * 2;
+      pellet.normalize();
+      const hit = G.combat.shoot(origin, pellet, spec.range, spec.damage, p);
+      const end = hit ? hit.point : endPoint.copy(origin).addScaledVector(pellet, spec.range);
       G.effects.tracer(mx, my, mz, end.x, end.y, end.z);
     }
     if (w.shotHeat <= 0) {
       G.wanted.crime('shoot', p.x, p.z);
-      w.shotHeat = 1.5;
+      w.shotHeat = GUNPLAY.shotCrimeInterval;
     }
-    G.pedestrians.alarm(p.x, p.z, 40);
-    G.gangs.alert(p.x, p.z, 45);
+    G.pedestrians.alarm(p.x, p.z, GUNPLAY.pedAlarmRadius);
+    G.gangs.alert(p.x, p.z, GUNPLAY.gangAlertRadius);
     G.economy.stat('shotsFired', 1);
     if (slot.clip === 0 && slot.ammo > 0) w.reload();
   };
 
+  /** Tick the timers, read the weapon keys and wheel, and fire when the trigger is held or clicked. */
   w.update = (dt, input) => {
     const p = G.player;
     w.cooldown = Math.max(0, w.cooldown - dt);
@@ -160,7 +184,9 @@ export function createWeapons(G) {
     if ((wantFire || punchKey) && w.cooldown <= 0 && w.reloading <= 0) w.fire();
   };
 
+  /** The save form: the current weapon and every slot, with -1 standing for infinite (JSON has no Infinity). */
   w.serialize = () => ({ current: w.current, inv: Object.fromEntries(ORDER.map((id) => [id, { owned: inv[id].owned, ammo: inv[id].ammo === Infinity ? -1 : inv[id].ammo, clip: inv[id].clip === Infinity ? -1 : inv[id].clip }])) });
+  /** Put a serialized arsenal back; an unowned or unknown current weapon falls back to fists. */
   w.restore = (data) => {
     if (!data) return;
     for (const id of ORDER) {
@@ -173,6 +199,7 @@ export function createWeapons(G) {
     w.current = inv[data.current] && inv[data.current].owned ? data.current : 'fists';
     equipModel();
   };
+  /** "clip / reserve" for the HUD, empty for fists. */
   w.ammoText = () => {
     if (w.current === 'fists') return '';
     const slot = inv[w.current];

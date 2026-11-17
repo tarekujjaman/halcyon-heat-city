@@ -133,12 +133,36 @@ export const POLICE = {
   pistolDamage: 6,
   fireInterval: 1.1,
   accuracy: 0.38,
+  accuracyAtCar: 0.5,
   officerRange: 32,
+  officerHealth: 70,
+  officerRunSpeed: 4.2,
+  officerCloseSpeed: 2.2,
+  officerStrafeSpeed: 1.4,
+  officerCloseRange: 13,
+  officerPointBlank: 6,
+  officerLeaveDistance: 110,
+  cruiserSpeed: 22,
+  chaseSpeed: 23,
+  speedPerStar: 2.5,
+  cruiserSightScale: 1.3,
+  cruiserLeaveDistance: 150,
+  wreckLeaveDistance: 90,
   roadblockStars: 3,
+  roadblockInterval: 22,
+  roadblockSpeed: 8,
+  maxRoadblocks: 2,
+  roadblockLeaveDistance: 220,
   heliStars: 4,
   heliHeight: 32,
+  heliLeaveHeight: 90,
   heliDamage: 2,
   heliInterval: 0.45,
+  heliRange: 120,
+  heliSightRange: 140,
+  heliOrbitRadius: 26,
+  heliMaxSpeed: 42,
+  heliLeaveDistance: 260,
 };
 
 export const WEAPONS = {
@@ -146,6 +170,21 @@ export const WEAPONS = {
   pistol: { name: 'Pistol', slot: 2, damage: 24, range: 70, rate: 0.28, ammo: 120, clip: 12, spread: 0.012, tracer: true, auto: false, pellets: 1, unlockRep: 0, price: 450 },
   smg: { name: 'SMG', slot: 3, damage: 13, range: 55, rate: 0.085, ammo: 300, clip: 30, spread: 0.035, tracer: true, auto: true, pellets: 1, unlockRep: 2, price: 1200 },
   shotgun: { name: 'Shotgun', slot: 4, damage: 11, range: 24, rate: 0.75, ammo: 60, clip: 6, spread: 0.08, tracer: true, auto: false, pellets: 7, unlockRep: 3, price: 1600 },
+};
+
+/** Gunplay rules shared by every weapon: reload time, how long a shot keeps Sol aiming, the crime cadence. */
+export const GUNPLAY = {
+  reloadSeconds: 1.1,
+  emptyClickCooldown: 0.3,
+  shotCrimeInterval: 1.5,
+  punchSeconds: 0.4,
+  aimAfterPunch: 1.2,
+  aimAfterShot: 2.5,
+  ammoCapMultiplier: 3,
+  pedAlarmRadius: 40,
+  gangAlertRadius: 45,
+  kickShotgun: 0.35,
+  kickGun: 0.12,
 };
 
 export const ECONOMY = {
@@ -157,13 +196,21 @@ export const ECONOMY = {
     { id: 'neon', name: 'Neon Row Loft', district: 'neon', price: 6000 },
     { id: 'palmetto', name: 'Palmetto Villa', district: 'palmetto', price: 15000 },
   ],
+  safehouseRep: 15,
   repaintPrice: 220,
   taxiBase: 25,
   taxiPerMetre: 0.9,
+  taxiFastSpeed: 12,
+  taxiFastBonus: 1.5,
+  taxiRep: 6,
   racePrize: [1500, 2500, 4000],
+  raceSecondShare: 0.4,
+  raceRep: 25,
   shardPrize: 150,
   shardCount: 20,
+  shardRep: 4,
   shardsBonus: 5000,
+  shardsBonusRep: 60,
 };
 
 export const TIME = {
@@ -188,11 +235,35 @@ export const TRAFFIC = {
 export const PEDS = {
   count: 44,
   spawnRadius: 120,
+  spawnMinDistance: 35,
+  spawnInterval: 0.15,
   despawnRadius: 160,
   walkSpeed: 1.35,
   panicSpeed: 5.6,
   panicRadius: 40,
+  panicSeconds: 5,
+  fleeSeconds: 7,
+  pauseChance: 0.06,
   health: 60,
+  runOverDamage: 9,
+  corpseSeconds: 25,
+  corpseDistance: 40,
+};
+
+/** The AI driver every traffic, police and mission car shares (see vehicles/driver.js). */
+export const DRIVER_AI = {
+  defaultLimit: 12,
+  reachDistance: 2.6,
+  passedDistance: 7,
+  lookahead: 7,
+  steerGain: 2.6,
+  chaseSteerGain: 2.2,
+  straightBias: 0.58,
+  honkAfter: 2.5,
+  reverseAfter: 9,
+  reverseSeconds: 1.4,
+  creepReset: 16,
+  chaseStuckAfter: 1.6,
 };
 
 export const PHYSICS = {

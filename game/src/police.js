@@ -1,6 +1,7 @@
-// Halcyon PD: cruisers with sirens and flashing lightbars that route by road to the search area
-// and ram once they see Sol, officers who step out to shoot and arrest, roadblocks across her
-// path from three stars, and the helicopter with its searchlight from four.
+// Halcyon PD, the response to the wanted level: cruisers with sirens and lightbars that route by
+// road to the search area and ram once they see Sol, officers who step out to shoot and arrest,
+// roadblocks across her path from three stars, and the helicopter with its searchlight and gunner
+// from four. Exports createPolice(G): update, respond, canSeePlayer, clearAll and the unit lists.
 import * as THREE from 'three';
 import { POLICE, WANTED } from './config.js';
 import { createDriver } from './vehicles/driver.js';
@@ -8,9 +9,28 @@ import { createCharacter, createGunMesh, LOOKS } from './characters.js';
 import { createRng, frand } from './rng.js';
 import { dirVec, rightVec, yawOfDir } from './navigation.js';
 
+/** Colliders a line of sight passes over: low walls and water lines hide nobody. */
+const SEE_THROUGH = new Set(['sea', 'edge', 'railing', 'steps']);
+/** An officer notices Sol a little beyond pistol range, and shoots a little beyond it too. */
+const OFFICER_SIGHT_SCALE = 1.5;
+const OFFICER_SHOT_REACH = 10;
+const CRUISER_EYE = 1.3;
+const OFFICER_EYE = 1.6;
+const OFFICER_GUN = 1.45;
+const HELI_FIRST_SPAWN = { x: -120, z: -80 };
+const CONE_LENGTH = 34;
+// Scratch: no allocation per shot or per officer step.
 const eye = new THREE.Vector3();
 const dir = new THREE.Vector3();
+const shotEnd = new THREE.Vector3();
+const officerBody = { x: 0, z: 0 };
+const officerHits = [];
 
+/**
+ * The police system: {cruisers, officers, roadblocks, heli, update(dt), respond(), canSeePlayer(),
+ * spawnCruiser, spawnOfficer, placeRoadblock, clearAll(), arrestProgress(), summonHeli(x, z)}.
+ * Officers are registered with combat as targets; cruisers live in the fleet with v.ai drivers.
+ */
 export function createPolice(G) {
   const rng = createRng(G.seed + 707);
   const nav = G.nav;
@@ -22,6 +42,7 @@ export function createPolice(G) {
   let arrestTimer = 0;
   let respondTimer = 0;
   let spawnTimer = 0;
+  /** What the chasing drivers aim at: Sol, or the car she drives. */
   const playerTarget = { get x() { return G.player.x; }, get z() { return G.player.z; }, get vx() { return G.player.vehicle ? G.player.vehicle.vx : G.player.vx; }, get vz() { return G.player.vehicle ? G.player.vehicle.vz : G.player.vz; }, get speed() { return G.player.vehicle ? G.player.vehicle.speed : G.player.speed; } };
 
   function clearLine(x1, y1, z1, x2, y2, z2) {
@@ -30,9 +51,10 @@ export function createPolice(G) {
     const dz = z2 - z1;
     const d = Math.hypot(dx, dy, dz) || 1;
     const hit = G.world.colliders.raycast(x1, y1, z1, dx / d, dy / d, dz / d, d);
-    return !hit || hit.collider.tag === 'sea' || hit.collider.tag === 'edge' || hit.collider.tag === 'railing' || hit.collider.tag === 'steps';
+    return !hit || SEE_THROUGH.has(hit.collider.tag);
   }
 
+  /** Can an eye at (x, y, z) see Sol within `range`, with nothing solid in between? */
   function canSeeFrom(x, y, z, range = WANTED.sightRange) {
     const p = G.player;
     const d = Math.hypot(p.x - x, p.z - z);
@@ -40,17 +62,36 @@ export function createPolice(G) {
     return clearLine(x, y, z, p.x, p.y + 1.2, p.z);
   }
 
+  /** Does any unit (cruiser, officer or the helicopter) have eyes on Sol right now? */
   function canSeePlayer() {
     if (G.player.dead) return false;
-    for (const v of cruisers) if (!v.wrecked && canSeeFrom(v.x, v.y + 1.3, v.z, WANTED.sightRange * 1.3)) return true;
-    for (const o of officers) if (!o.dead && canSeeFrom(o.x, o.y + 1.6, o.z)) return true;
-    if (heli && canSeeFrom(heli.x, heli.y, heli.z, 140)) return true;
+    for (const v of cruisers) if (!v.wrecked && canSeeFrom(v.x, v.y + CRUISER_EYE, v.z, WANTED.sightRange * POLICE.cruiserSightScale)) return true;
+    for (const o of officers) if (!o.dead && canSeeFrom(o.x, o.y + OFFICER_EYE, o.z)) return true;
+    if (heli && canSeeFrom(heli.x, heli.y, heli.z, POLICE.heliSightRange)) return true;
     return false;
   }
 
+  function countAlive(list) {
+    let n = 0;
+    for (const o of list) if (!o.dead) n += 1;
+    return n;
+  }
+
+  function hasOfficersOut(v) {
+    for (const o of officers) if (o.cruiser === v && !o.dead) return true;
+    return false;
+  }
+
+  function countActiveCruisers() {
+    let n = 0;
+    for (const v of cruisers) if (!v.wrecked && !v.leaving && !v.roadblock) n += 1;
+    return n;
+  }
+
+  /** A cruiser with two officers aboard at a lane `spot` ({x, z, yaw, node?, dir?, lane?}); options.silent keeps the siren off. */
   function spawnCruiser(spot, options = {}) {
     const v = G.fleet.spawn('cruiser', spot.x, spot.z, spot.yaw, { role: 'police', rng, color: '#ffffff' });
-    const ai = createDriver(v, nav, { limit: 22 + G.wanted.stars * 2.5, ignoreLights: true, aggressive: true });
+    const ai = createDriver(v, nav, { limit: POLICE.cruiserSpeed + G.wanted.stars * POLICE.speedPerStar, ignoreLights: true, aggressive: true });
     if (spot.node) ai.reset(spot.node, spot.dir, spot.lane);
     else ai.setRoad();
     v.ai = ai;
@@ -63,14 +104,15 @@ export function createPolice(G) {
     return v;
   }
 
+  /** An officer on foot at (x, z), armed with a pistol, from `cruiser` (null for a roadblock or a test). */
   function spawnOfficer(x, z, cruiser = null) {
     const model = createCharacter(LOOKS.officer);
     model.setWeapon(createGunMesh('pistol'));
     G.world.scene.add(model.group);
     const o = {
-      kind: 'officer', x, z, y: G.world.layout.groundHeight(x, z), yaw: 0, hp: 70, dead: false, removed: false,
+      kind: 'officer', x, z, y: G.world.layout.groundHeight(x, z), yaw: 0, hp: POLICE.officerHealth, dead: false, removed: false,
       radius: 0.42, height: 1.85, model, cruiser, fireTimer: 0.8 + frand(), deadTimer: 0, strafe: frand() < 0.5 ? 1 : -1, strafeTimer: 0,
-      onHit(dmg, source) {
+      onHit(dmg) {
         if (o.dead) return;
         o.hp -= dmg;
         if (o.hp <= 0) {
@@ -103,6 +145,7 @@ export function createPolice(G) {
     spawnTimer = 0;
   }
 
+  /** One pistol shot from officer `o` at Sol, missing by a scatter when the accuracy roll fails. */
   function shootAt(o, originY, range, damage, accuracy) {
     const p = G.player;
     const tx = p.x;
@@ -121,11 +164,12 @@ export function createPolice(G) {
     }
     G.effects.muzzleFlash(eye.x, eye.y, eye.z, dir.x, dir.y, dir.z);
     const hit = G.combat.shoot(eye, dir, range, damage, o);
-    const end = hit ? hit.point : eye.clone().addScaledVector(dir, range);
+    const end = hit ? hit.point : shotEnd.copy(eye).addScaledVector(dir, range);
     G.effects.tracer(eye.x, eye.y, eye.z, end.x, end.y, end.z);
     G.audio.play('pistol', Math.max(0.2, 1 - d / 60));
   }
 
+  /** An officer closes in, strafes at mid range, crowds Sol on foot, and shoots when in range and in sight. */
   function updateOfficer(o, dt) {
     const p = G.player;
     if (o.dead) {
@@ -138,7 +182,7 @@ export function createPolice(G) {
     const dz = p.z - o.z;
     const d = Math.hypot(dx, dz);
     o.yaw = Math.atan2(dx, dz);
-    const sees = canSeeFrom(o.x, o.y + 1.6, o.z, POLICE.officerRange * 1.5);
+    const sees = canSeeFrom(o.x, o.y + OFFICER_EYE, o.z, POLICE.officerRange * OFFICER_SIGHT_SCALE);
     let move = 0;
     o.strafeTimer -= dt;
     if (o.strafeTimer <= 0) {
@@ -147,30 +191,30 @@ export function createPolice(G) {
     }
     let mx = 0;
     let mz = 0;
-    if (d > 13 || !sees) {
-      move = 4.2;
+    if (d > POLICE.officerCloseRange || !sees) {
+      move = POLICE.officerRunSpeed;
       mx = dx / (d || 1);
       mz = dz / (d || 1);
-    } else if (d < 6 && (p.state === 'foot')) {
-      move = 2.2;
+    } else if (d < POLICE.officerPointBlank && (p.state === 'foot')) {
+      move = POLICE.officerCloseSpeed;
       mx = dx / (d || 1);
       mz = dz / (d || 1);
     } else {
-      move = 1.4;
+      move = POLICE.officerStrafeSpeed;
       mx = -dz / (d || 1) * o.strafe;
       mz = dx / (d || 1) * o.strafe;
     }
     o.x += mx * move * dt;
     o.z += mz * move * dt;
-    const body = { x: o.x, z: o.z };
-    const res = G.world.colliders.resolveCircle(body, o.radius, 0, []);
-    if (res.length) { o.x = body.x; o.z = body.z; }
+    officerBody.x = o.x;
+    officerBody.z = o.z;
+    const res = G.world.colliders.resolveCircle(officerBody, o.radius, 0, officerHits);
+    if (res.length) { o.x = officerBody.x; o.z = officerBody.z; }
     o.y = G.world.layout.groundHeight(o.x, o.z);
     o.fireTimer -= dt;
-    const target = p.state === 'car' && p.vehicle ? p.vehicle : p;
     if (sees && d < POLICE.officerRange && o.fireTimer <= 0 && !p.dead) {
       o.fireTimer = POLICE.fireInterval * (0.8 + frand() * 0.5);
-      shootAt(o, 1.45, POLICE.officerRange + 10, POLICE.pistolDamage, p.state === 'car' ? 0.5 : POLICE.accuracy);
+      shootAt(o, OFFICER_GUN, POLICE.officerRange + OFFICER_SHOT_REACH, POLICE.pistolDamage, p.state === 'car' ? POLICE.accuracyAtCar : POLICE.accuracy);
       G.wanted.noticePlayer();
     }
     o.model.group.position.set(o.x, o.y, o.z);
@@ -179,9 +223,9 @@ export function createPolice(G) {
     if (move > 2) o.model.animateWalk(move, dt, true);
     else o.model.animateWalk(move, dt, false);
     o.model.animateAim(true);
-    void target;
   }
 
+  /** The helicopter model: body, rotors, skids, searchlight with its visible cone, and a blinking tail light. */
   function buildHeli() {
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.0, 5.5), new THREE.MeshStandardMaterial({ color: '#15306b', metalness: 0.4, roughness: 0.5 }));
@@ -219,9 +263,9 @@ export function createPolice(G) {
     light.position.set(0, -1, 1.5);
     g.add(light);
     g.add(light.target);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(4.5, 34, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#fff0b0', transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(4.5, CONE_LENGTH, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#fff0b0', transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     cone.renderOrder = 4;
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(1.8, 34, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#fff8d8', transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(1.8, CONE_LENGTH, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#fff8d8', transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     inner.position.y = 0;
     cone.add(inner);
     G.world.scene.add(cone);
@@ -232,29 +276,37 @@ export function createPolice(G) {
     return { group: g, rotor, rotor2, tailRotor, light, cone, blink, x: 0, y: POLICE.heliHeight, z: 0, angle: 0, fireTimer: 1, vx: 0, vz: 0 };
   }
 
+  function removeHeli() {
+    if (!heli) return;
+    G.world.scene.remove(heli.group);
+    G.world.scene.remove(heli.cone);
+    heli = null;
+  }
+
+  /** The helicopter arrives at heliStars, orbits Sol with the searchlight on her, fires when she is exposed, and leaves when the heat drops. */
   function updateHeli(dt, stars) {
     const p = G.player;
     if (stars >= POLICE.heliStars && !heli && !p.dead) {
       heli = buildHeli();
-      heli.x = p.x - 120;
-      heli.z = p.z - 80;
+      heli.x = p.x + HELI_FIRST_SPAWN.x;
+      heli.z = p.z + HELI_FIRST_SPAWN.z;
       G.notify('Police helicopter inbound');
     }
     if (!heli) return;
     const leaving = stars < POLICE.heliStars || p.dead;
     heli.angle += dt * 0.35;
-    const orbitR = 26;
+    const orbitR = POLICE.heliOrbitRadius;
     const tx = leaving ? heli.x + 200 : p.x + Math.cos(heli.angle) * orbitR;
     const tz = leaving ? heli.z - 200 : p.z + Math.sin(heli.angle) * orbitR;
     const k = Math.min(1, dt * 0.9);
     heli.vx += ((tx - heli.x) * 0.9 - heli.vx) * k;
     heli.vz += ((tz - heli.z) * 0.9 - heli.vz) * k;
-    const maxV = 42;
+    const maxV = POLICE.heliMaxSpeed;
     const sp = Math.hypot(heli.vx, heli.vz);
     if (sp > maxV) { heli.vx *= maxV / sp; heli.vz *= maxV / sp; }
     heli.x += heli.vx * dt;
     heli.z += heli.vz * dt;
-    heli.y += ((leaving ? 90 : POLICE.heliHeight) - heli.y) * Math.min(1, dt * 0.8);
+    heli.y += ((leaving ? POLICE.heliLeaveHeight : POLICE.heliHeight) - heli.y) * Math.min(1, dt * 0.8);
     const g = heli.group;
     g.position.set(heli.x, heli.y, heli.z);
     g.rotation.y = Math.atan2(heli.vx, heli.vz);
@@ -273,7 +325,7 @@ export function createPolice(G) {
     const cz = (heli.z + p.z) / 2;
     heli.cone.position.set(cx, cy, cz);
     const len = Math.hypot(p.x - heli.x, p.y - heli.y, p.z - heli.z);
-    heli.cone.scale.set(1, len / 34, 1);
+    heli.cone.scale.set(1, len / CONE_LENGTH, 1);
     heli.cone.lookAt(p.x, p.y, p.z);
     heli.cone.rotateX(-Math.PI / 2);
     heli.fireTimer -= dt;
@@ -281,19 +333,15 @@ export function createPolice(G) {
       heli.fireTimer = POLICE.heliInterval;
       eye.set(heli.x, heli.y - 1, heli.z);
       dir.set(p.x - eye.x + (frand() - 0.5) * 3, p.y + 1 - eye.y, p.z - eye.z + (frand() - 0.5) * 3).normalize();
-      const hit = G.combat.raycast(eye, dir, 120, null);
-      const end = hit ? hit.point : eye.clone().addScaledVector(dir, 120);
+      const hit = G.combat.raycast(eye, dir, POLICE.heliRange, null);
+      const end = hit ? hit.point : shotEnd.copy(eye).addScaledVector(dir, POLICE.heliRange);
       G.effects.tracer(eye.x, eye.y, eye.z, end.x, end.y, end.z);
       if (hit && hit.kind === 'player') p.damage(POLICE.heliDamage, 'helicopter');
       else if (hit && hit.kind === 'vehicle' && hit.target.driver === p) G.combat.damageVehicle(hit.target, POLICE.heliDamage * 0.6, 'helicopter');
       else if (hit) G.effects.hitSparks(end.x, end.y, end.z);
       G.audio.play('smg', 0.35);
     }
-    if (leaving && Math.hypot(heli.x - p.x, heli.z - p.z) > 260) {
-      G.world.scene.remove(heli.group);
-      G.world.scene.remove(heli.cone);
-      heli = null;
-    }
+    if (leaving && Math.hypot(heli.x - p.x, heli.z - p.z) > POLICE.heliLeaveDistance) removeHeli();
   }
 
   /** Two cruisers parked across the road two intersections ahead of Sol, officers behind them. */
@@ -330,6 +378,14 @@ export function createPolice(G) {
     G.notify('Roadblock ahead');
   }
 
+  function removeRoadblock(b) {
+    for (const cr of b.cruisers) removeCruiser(cr);
+    for (const o of b.officers) removeOfficer(o);
+    const i = roadblocks.indexOf(b);
+    if (i >= 0) roadblocks.splice(i, 1);
+  }
+
+  /** One step of dt seconds for every unit, the arrest timer, the roadblocks and the helicopter. */
   function update(dt) {
     const stars = G.wanted.stars;
     const p = G.player;
@@ -337,8 +393,7 @@ export function createPolice(G) {
     spawnTimer -= dt;
     // Cruisers.
     const wantCruisers = p.dead ? 0 : POLICE.cruisersByStar[stars];
-    const active = cruisers.filter((v) => !v.wrecked && !v.leaving && !v.roadblock);
-    if (active.length < wantCruisers && spawnTimer <= 0) {
+    if (countActiveCruisers() < wantCruisers && spawnTimer <= 0) {
       const s = G.wanted.search;
       const spot = nav.randomLaneSpot(rng, s.x, s.z, 70, 130, 40);
       if (spot && G.fleet.spotFree(spot.x, spot.z, 8)) {
@@ -352,7 +407,7 @@ export function createPolice(G) {
       if (v.removed) { cruisers.splice(i, 1); continue; }
       const d = Math.hypot(v.x - p.x, v.z - p.z);
       if (v.wrecked) {
-        if (d > 90) removeCruiser(v);
+        if (d > POLICE.wreckLeaveDistance) removeCruiser(v);
         continue;
       }
       if (v.roadblock) continue;
@@ -361,18 +416,20 @@ export function createPolice(G) {
         v.siren = false;
         if (!v.leaving) {
           v.leaving = true;
-          if (v.ai) v.ai.setRoad();
-          if (v.ai) v.ai.limit = 12;
+          if (v.ai) {
+            v.ai.setRoad();
+            v.ai.limit = 12;
+          }
         }
-        if (d > 150) removeCruiser(v);
+        if (d > POLICE.cruiserLeaveDistance) removeCruiser(v);
         if (v.ai) v.ai.step(dt, G.traffic.ctx);
         continue;
       }
-      const sees = canSeeFrom(v.x, v.y + 1.3, v.z, WANTED.sightRange * 1.3);
+      const sees = canSeeFrom(v.x, v.y + CRUISER_EYE, v.z, WANTED.sightRange * POLICE.cruiserSightScale);
       if (sees) v.lostTimer = 0;
       else v.lostTimer += dt;
       if (v.ai) {
-        if ((sees || d < 28) && v.ai.mode !== 'chase') v.ai.setChase(playerTarget, 23 + stars * 2.5);
+        if ((sees || d < 28) && v.ai.mode !== 'chase') v.ai.setChase(playerTarget, POLICE.chaseSpeed + stars * POLICE.speedPerStar);
         else if (v.ai.mode === 'chase' && v.lostTimer > 4 && d > 60) {
           v.ai.setRoad();
           v.ai.routeTo(G.wanted.search.x, G.wanted.search.z);
@@ -382,10 +439,9 @@ export function createPolice(G) {
         v.ai.step(dt, G.traffic.ctx);
       }
       if (sees) G.wanted.noticePlayer();
-      // Ramming counts as police contact: reset the evasion timer.
-      // Officers get out when close to a stopped or on-foot Sol.
+      // Officers get out when close to a stopped or on-foot Sol (ramming resets the evasion timer in main.js).
       const playerSlow = p.state === 'foot' || (p.vehicle && Math.abs(p.vehicle.speed) < 2.5);
-      if (v.crew > 0 && d < 16 && playerSlow && Math.abs(v.speed) < 3 && officers.filter((o) => !o.dead).length < POLICE.officersByStar[stars] + 1) {
+      if (v.crew > 0 && d < 16 && playerSlow && Math.abs(v.speed) < 3 && countAlive(officers) < POLICE.officersByStar[stars] + 1) {
         const rx = -Math.cos(v.yaw);
         const rz = Math.sin(v.yaw);
         for (let k = 0; k < Math.min(2, v.crew); k += 1) {
@@ -394,14 +450,14 @@ export function createPolice(G) {
         }
         v.crew = 0;
       }
-      if (v.crew === 0 && d > 60 && officers.filter((o) => o.cruiser === v && !o.dead).length === 0) v.crew = 2;
+      if (v.crew === 0 && d > 60 && !hasOfficersOut(v)) v.crew = 2;
       if (d < 60) G.audio.siren(v, d);
     }
     // Officers on foot.
     for (let i = officers.length - 1; i >= 0; i -= 1) {
       const o = officers[i];
       const d = Math.hypot(o.x - p.x, o.z - p.z);
-      if (!o.dead && (stars === 0 || d > 110 || p.dead)) {
+      if (!o.dead && (stars === 0 || d > POLICE.officerLeaveDistance || p.dead)) {
         removeOfficer(o);
         continue;
       }
@@ -427,31 +483,24 @@ export function createPolice(G) {
     }
     // Roadblocks.
     roadblockTimer -= dt;
-    if (stars >= POLICE.roadblockStars && p.state === 'car' && p.vehicle && Math.abs(p.vehicle.speed) > 8 && roadblockTimer <= 0 && roadblocks.length < 2) {
-      roadblockTimer = 22;
+    if (stars >= POLICE.roadblockStars && p.state === 'car' && p.vehicle && Math.abs(p.vehicle.speed) > POLICE.roadblockSpeed && roadblockTimer <= 0 && roadblocks.length < POLICE.maxRoadblocks) {
+      roadblockTimer = POLICE.roadblockInterval;
       placeRoadblock();
     }
     for (let i = roadblocks.length - 1; i >= 0; i -= 1) {
       const b = roadblocks[i];
       const d = Math.hypot(b.x - p.x, b.z - p.z);
-      if (stars === 0 || d > 220) {
-        for (const cr of b.cruisers) { const k = cruisers.indexOf(cr); if (k >= 0) cruisers.splice(k, 1); G.fleet.remove(cr); }
-        for (const o of b.officers) removeOfficer(o);
-        roadblocks.splice(i, 1);
-      }
+      if (stars === 0 || d > POLICE.roadblockLeaveDistance) removeRoadblock(b);
     }
     updateHeli(dt, stars);
   }
 
+  /** Every unit gone at once: new game, hospital, arrest. */
   function clearAll() {
     for (const v of [...cruisers]) removeCruiser(v);
     for (const o of [...officers]) removeOfficer(o);
     roadblocks.length = 0;
-    if (heli) {
-      G.world.scene.remove(heli.group);
-      G.world.scene.remove(heli.cone);
-      heli = null;
-    }
+    removeHeli();
     arrestTimer = 0;
   }
 
@@ -459,8 +508,9 @@ export function createPolice(G) {
   return {
     cruisers, officers, roadblocks, update, respond, canSeePlayer, spawnCruiser, spawnOfficer, clearAll, placeRoadblock,
     get heli() { return heli; },
+    /** 0..1 of the way to an arrest, for the HUD. */
     arrestProgress: () => arrestTimer / WANTED.arrestSeconds,
-    /** Force a helicopter now (screenshot scenes). */
+    /** Force a helicopter now at (x, z) (screenshot scenes). */
     summonHeli(x, z) {
       if (!heli) heli = buildHeli();
       heli.x = x;
