@@ -53,9 +53,13 @@ export async function stageShot(name, G) {
   };
 
   if (name === 'chase') {
-    // Westbound on Ocean Drive: the sun ahead-left over the sea, the pier and hotels behind.
+    // The cover. Westbound on Ocean Drive at four stars: the red coupe drifts big in the middle
+    // of the frame, two cruisers close behind it with their lightbars going, the helicopter and
+    // its beam over them, palms lining both pavements, the hotels on the left and the beach,
+    // pier and ferris wheel on the right, traffic and a watching crowd, the full HUD.
     const z = layout.oceanZ - 1.75;
-    const x0 = layout.roadX(4) + 18;
+    const shiftParam = Number.parseFloat(new URLSearchParams(window.location.search).get('shift'));
+    const x0 = layout.roadX(4) + 48 + (Number.isFinite(shiftParam) ? shiftParam : 0);
     const coupe = G.fleet.spawn('coupe', x0, z, -Math.PI / 2, { color: '#c81e2e', role: 'player', owner: 'player' });
     G.player.enterVehicle(coupe);
     G.economy.money = 4350;
@@ -65,25 +69,18 @@ export async function stageShot(name, G) {
     G.weapons.select('smg');
     G.radio.setStation(0, true);
     G.world.sky.setHour(17.45);
-    G.traffic.spawnCar({ x: x0 + 48, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 1 }, 'taxi');
-    G.traffic.spawnCar({ x: x0 + 70, z: layout.oceanZ + 1.75, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 0 }, 'sedan');
-    G.traffic.spawnCar({ x: x0 - 70, z: layout.oceanZ - 5.25, yaw: -Math.PI / 2, node: G.nav.node(3, 9), dir: 'w', lane: 1 }, 'van');
-    // Oncoming traffic in the far lane beside the camera, so the drive reads as a busy street.
-    const passing = G.traffic.spawnCar({ x: x0 - 4, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 1 }, 'pickup');
-    passing.vx = 9;
-    const from = { x: x0 + 6, z };
+    // Traffic along the drive: eastbound cars in the far lanes ahead of the camera, a van behind.
+    G.traffic.spawnCar({ x: x0 + 14, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 1 }, 'taxi');
+    G.traffic.spawnCar({ x: x0 + 34, z: layout.oceanZ + 1.75, yaw: Math.PI / 2, node: G.nav.node(6, 9), dir: 'e', lane: 0 }, 'sedan');
+    G.traffic.spawnCar({ x: x0 + 52, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(6, 9), dir: 'e', lane: 1 }, 'pickup');
+    G.traffic.spawnCar({ x: x0 + 48, z: layout.oceanZ - 5.25, yaw: -Math.PI / 2, node: G.nav.node(5, 9), dir: 'w', lane: 1 }, 'van');
+    const from = { x: x0 - 20, z };
     crowd(G, [
-      [x0 - 15, layout.oceanZ - 9, false], [x0 - 19, layout.oceanZ - 8.4, false], [x0 - 9, layout.oceanZ - 9.6, true], [x0 + 2, layout.oceanZ - 8.8, false], [x0 + 10, layout.oceanZ - 9.2, true],
-      [x0 - 14, layout.boardwalkZ + 2.5, true], [x0 - 6, layout.boardwalkZ + 4, true], [x0 + 4, layout.boardwalkZ + 3, false], [x0 - 22, layout.boardwalkZ + 3.5, false], [x0 + 14, layout.boardwalkZ + 2, false], [x0 - 26, layout.boardwalkZ + 2.2, false],
+      [x0 - 15, layout.oceanZ - 9, false], [x0 - 19, layout.oceanZ - 8.4, false], [x0 - 9, layout.oceanZ - 9.6, true], [x0 + 2, layout.oceanZ - 8.8, false], [x0 + 10, layout.oceanZ - 9.2, true], [x0 + 22, layout.oceanZ - 9.4, false],
+      [x0 - 14, layout.boardwalkZ + 2.5, true], [x0 - 6, layout.boardwalkZ + 4, true], [x0 + 4, layout.boardwalkZ + 3, false], [x0 - 22, layout.boardwalkZ + 3.5, false], [x0 + 14, layout.boardwalkZ + 2, false], [x0 - 26, layout.boardwalkZ + 2.2, false], [x0 + 26, layout.boardwalkZ + 3.2, false],
     ], from);
     // Bystanders who stay put and watch the chase go by.
-    for (const ped of G.pedestrians.list) if (ped.state === 'walk') { ped.state = 'wait'; ped.waitTimer = 30; ped.yaw = Math.atan2(x0 - ped.x, z - ped.z); }
-    const cruisers = [];
-    for (const [dx, dz] of [[11, -3.6], [17, 0.8], [24, -3.0], [31, 4.0]]) {
-      const c = G.police.spawnCruiser({ x: x0 + dx, z: z + dz, yaw: -Math.PI / 2 });
-      c.vx = -20;
-      cruisers.push(c);
-    }
+    for (const ped of G.pedestrians.list) if (ped.state === 'walk') { ped.state = 'wait'; ped.waitTimer = 30; ped.yaw = Math.atan2(x0 - 24 - ped.x, z - ped.z); }
     G.wanted.setStars(4);
     G.wanted.search.x = x0 + 40;
     G.wanted.search.z = z + 20;
@@ -91,21 +88,35 @@ export async function stageShot(name, G) {
     G.hud.setObjective("Lose the cops before reaching Teo's garage");
     G.hud.setWaypoint(L.garageParking.x, L.garageParking.z, 'objective');
     if (G.missions.startMarker) G.markers.remove(G.missions.startMarker);
+    // The drift: full speed west, then a handbrake flick to the right that swings the tail out.
     coupe.vx = -22;
-    for (const c of cruisers) c.ai.setChase(playerTarget(G), 30);
-    drive(G, 1.1, [KEYS.forward]);
-    drive(G, 0.7, [KEYS.forward, KEYS.handbrake, KEYS.right]);
-    drive(G, 0.2, [KEYS.forward, KEYS.right]);
-    for (const c of cruisers) c.siren = true;
+    drive(G, 0.9, [KEYS.forward]);
+    drive(G, 0.45, [KEYS.forward, KEYS.handbrake, KEYS.right]);
+    drive(G, 0.15, [KEYS.forward, KEYS.right]);
     const v = G.player.vehicle;
-    G.police.summonHeli(v.x + 30, v.z + 1.5);
-    G.police.heli.y = 13.5;
+    // Two cruisers right on its tail, one in each lane, angled in toward it, lightbars on.
+    const cruisers = [];
+    for (const [dx, dz, turn] of [[9, -4.5, 0.2], [14.5, -0.5, -0.12]]) {
+      const c = G.police.spawnCruiser({ x: v.x + dx, z: v.z + dz, yaw: -Math.PI / 2 + turn });
+      c.vx = -19;
+      c.siren = true;
+      c.ai.setChase(playerTarget(G), 30);
+      cruisers.push(c);
+    }
+    // Camera ahead of the coupe on the beach side, raised, looking back east down the drive with
+    // a tight lens that keeps the nearest palm crowns out of the corners; the helicopter hangs
+    // low over the road behind the cruisers, in the clear sky under the objective, nose to us.
+    // (?cam=dx,dy,dz,lx,ly,lz,fov,hx,hz,hy and ?shift=metres override these for composition reviews.)
+    const cam = [-8.5, 5.2, 2, 12, 0.6, 1, 46, 26.5, 0.3, 5.9];
+    const camParam = new URLSearchParams(window.location.search).get('cam');
+    if (camParam) camParam.split(',').forEach((n, i) => { if (Number.isFinite(Number.parseFloat(n))) cam[i] = Number.parseFloat(n); });
+    G.police.summonHeli(v.x + cam[7], v.z + cam[8]);
+    G.police.heli.y = cam[9];
     G.police.heli.angle = Math.PI;
     G.simulate(0.06, 1 / 60);
-    // Camera ahead of the coupe (west, by the road's direction) on the sea side, low, looking back east.
-    const camPos = { x: v.x - 10.2, y: v.y + 2.1, z: v.z + 4.4 };
-    const look = { x: v.x + 7, y: v.y + 3.1, z: v.z - 1.8 };
-    G.camera.camera.fov = 56;
+    const camPos = { x: v.x + cam[0], y: v.y + cam[1], z: v.z + cam[2] };
+    const look = { x: v.x + cam[3], y: v.y + cam[4], z: v.z + cam[5] };
+    G.camera.camera.fov = cam[6];
     G.camera.camera.updateProjectionMatrix();
     placeCamera(G, camPos, look);
     finish();
@@ -185,8 +196,9 @@ export async function stageShot(name, G) {
     G.economy.money = 9850;
     G.economy.rep = 295;
     G.economy.stats.missions = 6;
-    const cam = { x: car.x - 18, y: 7, z: car.z + 20 };
-    placeCamera(G, cam, { x: car.x + 10, y: 12, z: car.z - 30 });
+    // From above the road, clear of the pavement palms, with the towers behind the panel.
+    const cam = { x: car.x - 6, y: 9.5, z: car.z + 24 };
+    placeCamera(G, cam, { x: car.x + 12, y: 13, z: car.z - 30 });
     finish();
     G.menus.showMissionComplete({ def: bank, money: 5000, rep: 80, levelUp: true, next: tide, finale: false });
     return;
@@ -215,6 +227,27 @@ export async function stageShot(name, G) {
     G.player.revive(layout.roadX(4) - 24, z - 6, 0);
     G.simulate(0.3, 1 / 60);
     placeCamera(G, { x: layout.roadX(4) + 4, y: 3.2, z: z + 13 }, { x: layout.roadX(4) + 2, y: 0.8, z: z });
+    finish();
+    return;
+  }
+
+  if (name === 'rider') {
+    // Sol and an AI rider on Kestrels, side on, for reviewing the seat and the lean.
+    const z = layout.oceanZ + 1.75;
+    const x = layout.roadX(4) - 10;
+    G.world.sky.setHour(17.3);
+    const bike = G.fleet.spawn('bike', x, z, Math.PI / 2, { role: 'player', owner: 'player', color: '#c1121f' });
+    G.player.revive(x, z - 2, 0);
+    G.player.enterVehicle(bike);
+    const ai = G.traffic.spawnCar({ x: x + 4, z: z - 3.5, yaw: Math.PI / 2 - 0.6, node: G.nav.node(5, 9), dir: 'e', lane: 0 }, 'bike');
+    ai.ai.limit = 0;
+    ai.ctrl.handbrake = true;
+    G.simulate(0.3, 1 / 60);
+    bike.model.bodyGroup.rotation.z = 0.25;
+    G.player.model.animateSeated(true, 0.25 * 0.35);
+    G.simulate(1 / 60, 1 / 60);
+    bike.model.bodyGroup.rotation.z = 0.25;
+    placeCamera(G, { x: x + 1.5, y: 1.5, z: z + 4.6 }, { x: x + 1.2, y: 0.9, z: z });
     finish();
     return;
   }

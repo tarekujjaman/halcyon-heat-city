@@ -95,10 +95,16 @@ async function main() {
     await clickEl('#controls-back');
     await clickEl('#btn-settings');
     check('settings panel opens', await ev('!document.getElementById("panel-settings").classList.contains("hidden")'));
+    check('default mouse sensitivity is 0.0025 rad per pixel', near(await ev('__game.settings.sensitivity'), 0.0025, 1e-9) && near(await ev('__game.input.state.settings.sensitivity'), 0.0025, 1e-9), String(await ev('__game.settings.sensitivity')));
+    check('sensitivity slider shows 2.5 by default', (await ev('document.getElementById("set-sens").value')) === '2.5' && (await ev('document.getElementById("set-sens-v").textContent')) === '2.5', await ev('document.getElementById("set-sens").value'));
+    check('slider range 1 to 12 with Invert Y', (await ev('document.getElementById("set-sens").min')) === '1' && (await ev('document.getElementById("set-sens").max')) === '12' && await ev('!!document.getElementById("set-invert")'));
     await ev('(() => { const s = document.getElementById("set-sens"); s.value = 6; s.dispatchEvent(new Event("input", { bubbles: true })); })()');
     check('sensitivity slider applies', near(await ev('__game.settings.sensitivity'), 0.006, 1e-6));
     check('settings persisted', await ev('JSON.parse(localStorage.getItem("halcyon-heat-settings")).sensitivity') === 0.006);
-    await ev('(() => { const s = document.getElementById("set-sens"); s.value = 4; s.dispatchEvent(new Event("input", { bubbles: true })); })()');
+    // A setting saved by an earlier build (the old 0.004 default, Invert Y on) loads as it was.
+    await ev('(() => { const G = __game; G.save.saveSettings({ volume: 0.8, music: 0.7, sensitivity: 0.004, invertY: true, shadows: true }); G.applySettings(G.save.loadSettings() || {}); G.menus.showSettings("title"); })()');
+    check('a saved sensitivity from before keeps working', near(await ev('__game.input.state.settings.sensitivity'), 0.004, 1e-9) && (await ev('document.getElementById("set-sens").value')) === '4' && await ev('__game.input.state.settings.invertY === true'));
+    await ev('(() => { const i = document.getElementById("set-invert"); i.checked = false; i.dispatchEvent(new Event("input", { bubbles: true })); })()');
     await clickEl('#settings-back');
     await clickEl('#btn-new-game');
     let s = await state();
@@ -167,8 +173,17 @@ async function main() {
     }
     await adv(0.5);
     const yaw1 = (await state()).camTargetYaw;
-    const expected = moved * 0.004;
+    const sens = await ev('__game.settings.sensitivity');
+    const expected = moved * sens;
     check('mouse sweep turns the camera through 360 degrees', near(yaw0 - yaw1, expected, 0.3), `turned ${((yaw0 - yaw1) * 180 / Math.PI).toFixed(0)} deg for ${moved} px (expected ${(expected * 180 / Math.PI).toFixed(0)})`);
+    // A flick of more than a half turn in one frame swings the long way, the way the mouse went.
+    await adv(0.8);
+    const flick0 = await state();
+    const flickPx = Math.ceil(4.8 / sens);
+    await ev(`__game.input.injectLook(${flickPx}, 0); 0`);
+    await adv(1.0);
+    const flick1 = await state();
+    check('a fast flick never swings the short way round', near(flick1.camYaw - flick0.camYaw, -flickPx * sens, 0.06) && near(flick1.camYaw, flick1.camTargetYaw, 0.02), `yaw moved ${(flick1.camYaw - flick0.camYaw).toFixed(2)} rad for ${flickPx} px (expected ${(-flickPx * sens).toFixed(2)})`);
     await ev('__game.input.injectLook(0, -3000); 0');
     await adv(0.6);
     const pitchUp = await ev('__game.camera.state.pitch');
@@ -182,6 +197,10 @@ async function main() {
     await hold(['ArrowLeft'], 1);
     const yawB = (await state()).camTargetYaw;
     check('arrow keys turn the camera', yawB > yawA + 1.5, (yawB - yawA).toFixed(2));
+    await hold(['KeyE'], 0.6);
+    await hold(['KeyQ'], 0.6);
+    const yawC = (await state()).camTargetYaw;
+    check('E and Q do not turn the camera (E is interact)', near(yawC, yawB, 1e-6), (yawC - yawB).toFixed(3));
     await ev('(() => { const G = __game; const L = G.world.layout; G.player.teleport(L.roadX(5) + 4, L.roadZ(4) + 30, 0); G.camera.snapTo(0, 0.28); })()');
     await adv(0.5);
     const camState = await state();
@@ -221,6 +240,14 @@ async function main() {
     const relBack = [s.camPos[0] - s.veh.x, s.camPos[2] - s.veh.z];
     const fwd = [Math.sin(s.veh.yaw), Math.cos(s.veh.yaw)];
     check('camera stays behind while reversing', relBack[0] * fwd[0] + relBack[1] * fwd[1] < 0);
+    // W while rolling backwards brakes firmly, then drives forward.
+    const revSpeed = s.speed;
+    await hold(['KeyW'], 0.6);
+    const afterBrake = (await state()).speed;
+    await hold(['KeyW'], 1.5);
+    const afterDrive = (await state()).speed;
+    check('W brakes a reversing car firmly', revSpeed < -3 && afterBrake > revSpeed + 4 && afterBrake < 1.5, `${(revSpeed * 3.6).toFixed(0)} -> ${(afterBrake * 3.6).toFixed(0)} km/h in 0.6 s`);
+    check('then drives forward', afterDrive > 3, `${(afterDrive * 3.6).toFixed(0)} km/h`);
     // Steering direction as seen from the chase camera.
     await ev('(() => { const G = __game; const v = G.player.vehicle; v.x = G.world.layout.roadX(5) - 1.75; v.z = G.world.layout.roadZ(2) + 10; v.yaw = 0; v.vx = 0; v.vz = 12; G.camera.snapTo(0, 0.2); })()');
     await hold(['KeyW'], 1.5);
@@ -230,6 +257,8 @@ async function main() {
     const camRight = [-sA.camFwd[2], sA.camFwd[0]];
     const lateralA = (sA2.veh.x - sA.veh.x) * camRight[0] + (sA2.veh.z - sA.veh.z) * camRight[1];
     check('A steers left on screen while driving forward', sA2.veh.yaw > sA.veh.yaw + 0.15 && lateralA < -0.5, `yaw +${(sA2.veh.yaw - sA.veh.yaw).toFixed(2)}, lateral ${lateralA.toFixed(2)}`);
+    const rollLeft = await ev('__game.player.vehicle.model.bodyGroup.rotation.z');
+    check('car body rolls to the outside (right side down) in a left turn', rollLeft > 0.01, rollLeft.toFixed(3));
     await ev('(() => { const G = __game; const v = G.player.vehicle; v.x = G.world.layout.roadX(5) - 1.75; v.z = G.world.layout.roadZ(2) + 10; v.yaw = 0; v.vx = 0; v.vz = 12; v.spin = 0; G.camera.snapTo(0, 0.2); })()');
     await hold(['KeyW'], 1.5);
     const sD = await state();
@@ -238,6 +267,8 @@ async function main() {
     const camRightD = [-sD.camFwd[2], sD.camFwd[0]];
     const lateralD = (sD2.veh.x - sD.veh.x) * camRightD[0] + (sD2.veh.z - sD.veh.z) * camRightD[1];
     check('D steers right on screen while driving forward', sD2.veh.yaw < sD.veh.yaw - 0.15 && lateralD > 0.5, `yaw ${(sD2.veh.yaw - sD.veh.yaw).toFixed(2)}, lateral ${lateralD.toFixed(2)}`);
+    const rollRight = await ev('__game.player.vehicle.model.bodyGroup.rotation.z');
+    check('car body rolls to the outside (left side down) in a right turn', rollRight < -0.01, rollRight.toFixed(3));
     // Chase camera behind the car after the mouse rests: assert the math.
     await ev('(() => { const G = __game; const v = G.player.vehicle; v.x = G.world.layout.roadX(5) - 1.75; v.z = G.world.layout.roadZ(2) + 10; v.yaw = 0; v.vx = 0; v.vz = 10; G.camera.snapTo(1.2, 0.2); })()');
     await hold(['KeyW'], 4);
@@ -258,18 +289,55 @@ async function main() {
     const sideDist = Math.hypot(s.x - vv.x, s.z - vv.z);
     check('F leaves the car beside it', s.pstate === 'foot' && sideDist > 1.5 && sideDist < 3.5, sideDist.toFixed(2));
     check('player visible again', await ev('__game.player.model.group.visible === true'));
-    // The motorbike: an open seat, so Sol stays visible riding it and leans with it.
+
+    // ---------------------------------------------------------------- markers and modes
+    section('markers');
+    // A foot-only marker reached by car: the hint shows, nothing fires; stepping out inside the ring fires it.
+    await ev('(() => { const G = __game; const L = G.world.layout; const v = G.fleet.vehicles.find(c => c.owner === "player"); window.__m1 = 0; window.__m2 = 0; const mx = L.roadX(5) - 1.75, mz = L.roadZ(2) + 40; window.__footMarker = G.markers.add(mx, mz, { radius: 3.2, kind: "objective", needFoot: true, once: true, onEnter: () => { window.__m1 += 1; } }); G.player.teleport(v.x + 2.5, v.z, Math.PI); G.player.enterVehicle(v); v.x = mx; v.z = mz; v.yaw = 0; v.vx = 0; v.vz = 0; G.camera.snapTo(0, 0.2); })()');
+    await adv(0.3);
+    check('driving into a foot-only marker does not trigger it', (await ev('__m1')) === 0 && (await ev('__game.markers.list.includes(__footMarker)')));
+    check('hint asks to get out of the car', (await ev('document.getElementById("hint").textContent')).includes('Get out of the car'));
+    await tap('KeyF');
+    await adv(0.3);
+    check('getting out inside the ring triggers the marker', (await ev('__m1')) === 1 && (await state()).pstate === 'foot', `fired ${await ev('__m1')}`);
+    // A car-only marker reached on foot: the hint shows; taking a car inside the ring fires it.
+    await ev('(() => { const G = __game; const p = G.player; window.__carMarker = G.markers.add(p.x, p.z, { radius: 4, kind: "objective", needVehicle: true, once: true, onEnter: () => { window.__m2 += 1; } }); })()');
+    await adv(0.3);
+    check('walking into a car-only marker does not trigger it', (await ev('__m2')) === 0 && (await ev('document.getElementById("hint").textContent')).includes('need a car'));
+    await ev('(() => { const G = __game; const v = G.fleet.vehicles.find(c => c.owner === "player"); v.x = G.player.x + 1.5; v.z = G.player.z; v.vx = 0; v.vz = 0; })()');
+    await tap('KeyF');
+    await adv(0.3);
+    check('taking a car inside the ring triggers the marker', (await ev('__m2')) === 1 && (await state()).pstate === 'car', `fired ${await ev('__m2')}`);
+    await ev('(() => { const G = __game; G.markers.remove(__footMarker); G.markers.remove(__carMarker); G.player.exitVehicle(); })()');
+
+    section('driving');
+    // The motorbike: an open seat, so Sol stays visible riding it, sits on the saddle and leans with it.
     await ev('(() => { const G = __game; const L = G.world.layout; const b = G.fleet.spawn("bike", L.roadX(5) + 1.75, L.roadZ(3) + 30, 0, { role: "player", owner: "player" }); G.player.teleport(b.x + 1.5, b.z, 0); G.camera.snapTo(0, 0.2); })()');
     await tap('KeyF');
     s = await state();
     check('F mounts the motorbike', s.pstate === 'car' && s.veh && s.veh.type === 'bike');
     check('rider stays visible on the bike', await ev('__game.player.model.group.visible === true && __game.player.model.group.parent === __game.player.vehicle.model.seat'));
+    const seatOf = (expr) => ev(`(() => { const G = __game; const v = ${expr}; const rider = v.driver === G.player ? G.player.model : v.rider; G.world.scene.updateMatrixWorld(true); const V = G.camera.camera.position.constructor; const hips = rider.parts.hips.getWorldPosition(new V()); const seat = v.model.seat.getWorldPosition(new V()); const shoe = rider.parts.shoeL.getWorldPosition(new V()); const head = rider.parts.head.getWorldPosition(new V()); return { hipAboveSeat: hips.y - seat.y, shoeAboveGround: shoe.y - v.y, headAboveGround: head.y - v.y, hipAlong: (hips.x - v.x) * Math.sin(v.yaw) + (hips.z - v.z) * Math.cos(v.yaw) }; })()`);
+    const seated = await seatOf('G.player.vehicle');
+    check('rider hips rest on the saddle', seated.hipAboveSeat > 0.02 && seated.hipAboveSeat < 0.22, `hips ${seated.hipAboveSeat.toFixed(2)} m above the seat`);
+    check('rider feet near the pegs', seated.shoeAboveGround > 0.2 && seated.shoeAboveGround < 0.55, `shoe ${seated.shoeAboveGround.toFixed(2)} m above the ground`);
+    check('rider head over the tank, not floating', seated.headAboveGround > 1.2 && seated.headAboveGround < 1.75, `head ${seated.headAboveGround.toFixed(2)} m`);
     await hold(['KeyW', 'KeyA'], 1.5);
-    check('bike leans into the turn with the rider', await ev('Math.abs(__game.player.vehicle.model.bodyGroup.rotation.z) > 0.05 && __game.player.model.group.parent === __game.player.vehicle.model.seat'));
+    const bikeLeanLeft = await ev('__game.player.vehicle.model.bodyGroup.rotation.z');
+    check('bike leans into a left turn (left side down) with the rider', bikeLeanLeft < -0.05 && await ev('__game.player.model.group.parent === __game.player.vehicle.model.seat'), bikeLeanLeft.toFixed(3));
+    await hold(['KeyW', 'KeyD'], 1.5);
+    const bikeLeanRight = await ev('__game.player.vehicle.model.bodyGroup.rotation.z');
+    check('bike leans into a right turn (right side down)', bikeLeanRight > 0.05, bikeLeanRight.toFixed(3));
     await hold(['KeyS'], 2);
     await ev('(() => { const v = __game.player.vehicle; v.vx = 0; v.vz = 0; })()');
-    await tap('KeyF');
-    check('dismounting puts Sol back in the world', (await state()).pstate === 'foot' && await ev('__game.player.model.group.parent === __game.world.scene'));
+    await tap('KeyE');
+    check('E (interact) dismounts and puts Sol back in the world', (await state()).pstate === 'foot' && await ev('__game.player.model.group.parent === __game.world.scene'));
+    // An AI rider sits the same way.
+    await ev('(() => { const G = __game; const spot = { x: G.world.layout.roadX(5) + 1.75, z: G.world.layout.roadZ(3) + 40, yaw: Math.PI, node: G.nav.node(5, 3), dir: "n", lane: 0 }; window.__aiBike = G.traffic.spawnCar(spot, "bike"); })()');
+    await adv(0.2);
+    const aiSeated = await seatOf('__aiBike');
+    check('AI rider hips rest on the saddle too', aiSeated.hipAboveSeat > 0.02 && aiSeated.hipAboveSeat < 0.22 && aiSeated.shoeAboveGround > 0.2 && aiSeated.shoeAboveGround < 0.55, `hips ${aiSeated.hipAboveSeat.toFixed(2)}, shoe ${aiSeated.shoeAboveGround.toFixed(2)}`);
+    await ev('__game.traffic.despawn(__aiBike); 0');
     // Steal a moving traffic car: the driver gets out and flees; the crime raises a star.
     await ev('(() => { const G = __game; const spot = { x: G.world.layout.roadX(5) + 1.75, z: G.world.layout.roadZ(3) + 20, yaw: Math.PI, node: G.nav.node(5, 3), dir: "n", lane: 0 }; const v = G.traffic.spawnCar(spot, "coupe"); v.ctrl.throttle = 0; v.ai.limit = 0; G.player.teleport(v.x + 2.2, v.z, 0); window.__stolen = v; })()');
     await adv(0.2);
@@ -305,15 +373,33 @@ async function main() {
       await adv(1.0);
       crashes += 1;
     }
-    check('many hard crashes before the car catches fire', crashes >= 4, `${crashes} crashes`);
+    check('many hard crashes before the car catches fire', crashes >= 4 && await ev('__game.player.vehicle.onFire'), `${crashes} crashes, on fire: ${await ev('__game.player.vehicle.onFire')}`);
     const fuse = await ev('__game.player.vehicle.fuse');
-    check('fire warning gives seconds to get out', fuse > 3, `${fuse} s`);
-    check('HUD warns the car is on fire', (await ev('document.getElementById("notifications").textContent')).includes('fire'));
+    check('fire warning gives seconds to get out', fuse > 3.5 && fuse <= 5, `${fuse.toFixed(2)} s`);
+    check('HUD warns the car is on fire', (await ev('document.getElementById("notifications").textContent')).includes('Car on fire! Get out!') && (await ev('document.getElementById("vehicle-name").textContent')).includes('ON FIRE'));
     await tap('KeyF');
     await adv(6);
     s = await state();
     check('burning car explodes, player survived outside', s.health > 0 && (await ev('__game.fleet.vehicles.every(v => v.driver !== __game.player)')), `health ${s.health}`);
     await ev('__game.player.heal(); 0');
+    // The fuse and the warning do not depend on how the car caught fire: a car shot to the
+    // threshold warns on the very step it ignites and gives the whole fuse before exploding.
+    await ev('(() => { const G = __game; const L = G.world.layout; const v = G.fleet.spawn("sedan", L.roadX(5) - 1.75, L.roadZ(2) + 30, 0, { role: "player", owner: "player" }); G.player.teleport(v.x + 2.5, v.z, 0); G.player.enterVehicle(v); G.hud.clearTransient(); G.combat.damageVehicle(v, 90, "test"); window.__fireCar = v; })()');
+    const litAt = await ev('(() => { const v = __fireCar; return { onFire: v.onFire, fuse: v.fuse, wrecked: v.wrecked }; })()');
+    check('the hit that lights the car starts a full 5 s fuse', litAt.onFire && near(litAt.fuse, 5, 1e-6) && !litAt.wrecked, JSON.stringify(litAt));
+    check('warning shown the moment the car ignites, before any step', (await ev('document.getElementById("notifications").textContent')).includes('Car on fire! Get out!'));
+    await adv(1 / 60);
+    check('one step later the fuse has barely moved', (await ev('__fireCar.fuse')) > 4.9, String(await ev('__fireCar.fuse')));
+    check('speedo shows ON FIRE with the countdown', (await ev('document.getElementById("vehicle-name").textContent')).includes('ON FIRE 5 s'));
+    await tap('KeyF');
+    let burn = 0;
+    while (burn < 8 && !(await ev('__fireCar.wrecked'))) {
+      await adv(0.25);
+      burn += 0.25;
+    }
+    check('the car explodes about 5 s after the warning', burn >= 4.5 && burn <= 5.5, `${burn.toFixed(2)} s`);
+    check('player got clear in time', (await ev('__game.player.health')) > 0 && (await ev('__game.player.state')) === 'foot');
+    await ev('__game.player.heal(); __game.fleet.remove(__fireCar); 0');
 
     // ---------------------------------------------------------------- frame rate independence
     section('timestep');
@@ -333,6 +419,35 @@ async function main() {
     const dFast = Math.abs(fast.veh.z - (await ev('__game.world.layout.roadZ(1) + 12')));
     check('same drive at 30 and 144 fps', near(dSlow, dFast, Math.max(3, dSlow * 0.06)) && near(slow.speed, fast.speed, 1.5), `${dSlow.toFixed(1)} m vs ${dFast.toFixed(1)} m, ${(slow.speed * 3.6).toFixed(0)} vs ${(fast.speed * 3.6).toFixed(0)} km/h`);
     check('coupe 0-100 km/h in about 4-6 s', fast.speed * 3.6 > 85 && fast.speed * 3.6 < 125, `${(fast.speed * 3.6).toFixed(0)} km/h after 4 s`);
+
+    // ---------------------------------------------------------------- slopes and kerbs
+    section('slopes');
+    // The driving step against a steep ramp and against a kerb: a slope costs nothing however fast
+    // the body lags the ground; a kerb costs its speed once per bump, whatever the frame rate.
+    const slopeRun = await ev(`(async () => {
+      const G = __game;
+      const { stepDriving } = await import('./src/vehicles/physics.js');
+      const spec = G.fleet.vehicles[0].spec;
+      const run = (ground, step) => {
+        const v = { spec, x: 0, z: 0, y: ground(0, 0), yaw: 0, vx: 0, vz: 25, speed: 25, slip: 0, steer: 0, throttle: 0, yawRate: 0, wheelSpin: 0, odometer: 0, wrecked: false, ctrl: { throttle: 0, brake: 0, steer: 0, handbrake: false }, impactTimer: 0, bump: 0 };
+        for (let t = 0; t < 1 - 1e-9; t += step) stepDriving(v, step, ground);
+        return v.speed;
+      };
+      const coast = run(() => 0, 1 / 60);
+      const ramp = run((x, z) => 0.2 * z, 1 / 60);
+      const kerb60 = run((x, z) => (z > 1 ? 0.14 : 0), 1 / 60);
+      const kerb144 = run((x, z) => (z > 1 ? 0.14 : 0), 1 / 144);
+      return { coast, ramp, kerb60, kerb144 };
+    })()`);
+    check('a 20 % slope at 90 km/h costs no speed beyond drag', near(slopeRun.ramp, slopeRun.coast, 0.3) && slopeRun.ramp > 20, `${(slopeRun.ramp * 3.6).toFixed(0)} km/h after 1 s on the ramp vs ${(slopeRun.coast * 3.6).toFixed(0)} coasting`);
+    check('a kerb costs about 10 % once', slopeRun.kerb60 < slopeRun.coast * 0.93 && slopeRun.kerb60 > slopeRun.coast * 0.86, `${(slopeRun.kerb60 * 3.6).toFixed(0)} km/h vs ${(slopeRun.coast * 3.6).toFixed(0)}`);
+    check('the kerb costs the same at 144 fps', near(slopeRun.kerb60, slopeRun.kerb144, 0.3), `${(slopeRun.kerb60 * 3.6).toFixed(1)} vs ${(slopeRun.kerb144 * 3.6).toFixed(1)} km/h`);
+    // On the real beach: down the sand slope at speed with the throttle held, no stall.
+    await ev('(() => { const G = __game; const L = G.world.layout; const x = L.roadX(2) + 30; const z = L.sandZ + 12; const v = G.fleet.spawn("coupe", x, z, 0, { role: "test", color: "#ffffff" }); G.player.revive(x + 2.5, z, 0); G.player.enterVehicle(v); v.vx = 0; v.vz = 22; G.camera.snapTo(0, 0.2); })()');
+    await hold(['KeyW'], 1.5);
+    const beach = await state();
+    check('a fast car keeps its speed down the beach slope', beach.speed > 18 && beach.veh && !beach.veh.wrecked, `${(beach.speed * 3.6).toFixed(0)} km/h after 1.5 s`);
+    await ev('(() => { const G = __game; G.player.exitVehicle(); for (const v of [...G.fleet.vehicles]) if (v.role === "test") G.fleet.remove(v); })()');
 
     // ---------------------------------------------------------------- weapons and combat
     section('weapons');
@@ -436,13 +551,36 @@ async function main() {
     await ev('(() => { const G = __game; const L = G.world.layout; G.player.heal(); let v = G.player.vehicle; if (!v) { v = G.fleet.spawn("coupe", L.roadX(9) - 1.75, L.roadZ(0) + 30, Math.PI, { role: "player", owner: "player" }); G.player.revive(v.x + 2.5, v.z, 0); G.player.enterVehicle(v); } G.fleet.repair(v); v.x = L.roadX(9) - 1.75; v.z = L.roadZ(0) + 30; v.yaw = Math.PI; v.vx = 0; v.vz = 0; G.police.clearAll(); G.wanted.setStars(2); G.wanted.search.x = L.roadX(2); G.wanted.search.z = L.roadZ(7); })()');
     check('still playing before the evasion test', (await ev('__game.state')) === 'playing', await ev('__game.state'));
     check('outside the search circle', await ev('__game.wanted.isOutsideSearch()'));
+    const heat2 = await ev('__game.wanted.heat');
+    const oneStar = await waitUntil('__game.wanted.stars === 1', 40, 1);
+    const heat1 = await ev('__game.wanted.heat');
+    check('losing a star drops the heat to that star\'s threshold', oneStar && heat1 === (await ev('__game.wanted.heat')) && heat1 === 12 && heat2 >= 35, `heat ${heat2} -> ${heat1}`);
+    // A tiny crime now adds only its own weight: still one star, not straight back to two.
+    await ev('(() => { const G = __game; const L = G.world.layout; G.wanted.crime("shootUnseen"); G.police.clearAll(); G.wanted.search.x = L.roadX(2); G.wanted.search.z = L.roadZ(7); })()');
+    await adv(0.1);
+    check('a small crime after losing a star does not bring it back', (await ev('__game.wanted.stars')) === 1 && (await ev('__game.wanted.heat')) === 15, `stars ${await ev('__game.wanted.stars')}, heat ${await ev('__game.wanted.heat')}`);
     const lost = await waitUntil('__game.wanted.stars === 0', 70, 2);
     check('stars fade when out of sight and outside the circle', lost, `stars ${await ev('__game.wanted.stars')}`);
+    check('no heat left at zero stars', (await ev('__game.wanted.heat')) === 0);
     check('"lost the cops" notification', (await ev('document.getElementById("notifications").textContent')).includes('lost the cops'));
 
     // ---------------------------------------------------------------- arrest and hospital
     section('arrest');
-    await ev('(() => { const G = __game; G.player.exitVehicle(); const p = G.player; G.wanted.setStars(1); const o = G.police.spawnOfficer(p.x + 1.5, p.z, null); o.fireTimer = 99; })()');
+    // Arrested at the wheel: the surrender takes the controls away, W does not move the car.
+    await ev('(() => { const G = __game; const p = G.player; const v = p.vehicle; v.vx = 0; v.vz = 0; G.wanted.setStars(1); const o = G.police.spawnOfficer(v.x + 2, v.z, null); o.fireTimer = 99; window.__officer = o; })()');
+    const surrendered = await waitUntil('__game.player.surrender === true', 8, 0.25);
+    check('stopped in a car next to an officer: arrest begins', surrendered, `surrender ${await ev('__game.player.surrender')}, state ${await ev('__game.state')}`);
+    const carBefore = await ev('(() => { const v = __game.player.vehicle; return v ? { x: v.x, z: v.z } : null; })()');
+    await ev('__officer.x = __game.player.vehicle.x + 2; __officer.z = __game.player.vehicle.z; 0');
+    await hold(['KeyW'], 1.0);
+    const carAfter = await ev('(() => { const v = __game.player.vehicle; return v ? { x: v.x, z: v.z, speed: v.speed, throttle: v.ctrl.throttle } : null; })()');
+    check('no driving during the surrender', carBefore && carAfter && Math.hypot(carAfter.x - carBefore.x, carAfter.z - carBefore.z) < 0.3 && Math.abs(carAfter.speed) < 0.5 && carAfter.throttle === 0, JSON.stringify(carAfter));
+    const arrestedInCar = await waitUntil('__game.state === "death"', 4, 0.25);
+    check('arrest screen follows the surrender', arrestedInCar && (await ev('document.getElementById("death-title").textContent')) === 'ARRESTED');
+    for (let i = 0; i < 100 && (await ev('__game.state')) !== 'playing'; i += 1) await new Promise((r) => setTimeout(r, 200));
+    check('released on foot after the car arrest', (await ev('__game.state')) === 'playing' && (await ev('__game.player.state')) === 'foot' && (await ev('__game.player.surrender')) === false);
+    check('resuming from the arrest asks for a click', await ev('__game.input.needsClick'));
+    await ev('(() => { const G = __game; const p = G.player; G.wanted.setStars(1); const o = G.police.spawnOfficer(p.x + 1.5, p.z, null); o.fireTimer = 99; })()');
     const arrested = await waitUntil('__game.state === "death"', 8, 0.5);
     check('standing still next to an officer gets you arrested', arrested, await ev('__game.state'));
     check('ARRESTED screen shown', (await ev('document.getElementById("death-title").textContent')) === 'ARRESTED');
@@ -706,6 +844,34 @@ async function main() {
     await tap('Escape');
     check('Escape pauses', (await ev('__game.state')) === 'paused' && (await ev('__game.menus.open')) === 'pause');
     check('mouse released on the pause menu', !(await ev('__game.input.locked')));
+    await clickEl('#btn-pause-resume');
+    check('resume returns to play and waits for a click', (await ev('__game.state')) === 'playing' && (await ev('__game.input.needsClick')));
+    await adv(0.1);
+    check('prompt reads "Click to resume"', (await ev('document.getElementById("pointer-prompt").textContent')) === 'Click to resume');
+    // The browser dropping the pointer lock (Esc, which it may not deliver as a key) pauses the game.
+    await ev('(() => { const s = __game.input.state; s.needClick = false; s.locked = true; s.wantLock = true; document.dispatchEvent(new Event("pointerlockchange")); })()');
+    check('losing the pointer lock while playing opens the pause menu', (await ev('__game.state')) === 'paused' && (await ev('__game.menus.open')) === 'pause' && !(await ev('__game.input.locked')));
+    await clickEl('#btn-pause-resume');
+    check('resume after a lost lock waits for a click', (await ev('__game.state')) === 'playing' && (await ev('__game.input.needsClick')));
+    // The click that recaptures the mouse never fires a weapon; the next one does.
+    await ev('(() => { const G = __game; if (G.player.state === "car") G.player.exitVehicle(); G.weapons.give("pistol", 24); G.weapons.select("pistol"); G.weapons.cooldown = 0; G.weapons.reloading = 0; })()');
+    await adv(0.1);
+    const clipBefore = await ev('__game.weapons.inv.pistol.clip');
+    await page.mouse('mouseMoved', 480, 300);
+    await page.mouse('mousePressed', 480, 300, { button: 'left', buttons: 1, clickCount: 1 });
+    await adv(0.1);
+    await page.mouse('mouseReleased', 480, 300, { button: 'left', clickCount: 1 });
+    await adv(0.1);
+    check('the click that recaptures the mouse does not fire', (await ev('__game.weapons.inv.pistol.clip')) === clipBefore && !(await ev('__game.input.needsClick')), `clip ${clipBefore} -> ${await ev('__game.weapons.inv.pistol.clip')}`);
+    await ev('__game.weapons.cooldown = 0; 0');
+    await page.mouse('mousePressed', 480, 300, { button: 'left', buttons: 1, clickCount: 1 });
+    await adv(0.1);
+    await page.mouse('mouseReleased', 480, 300, { button: 'left', clickCount: 1 });
+    await adv(0.1);
+    check('the next click fires', (await ev('__game.weapons.inv.pistol.clip')) === clipBefore - 1, `clip ${await ev('__game.weapons.inv.pistol.clip')}`);
+    await ev('__game.wanted.clear(); __game.police.clearAll(); 0');
+    await tap('Escape');
+    check('Escape still pauses when the pointer is free', (await ev('__game.state')) === 'paused');
     await clickEl('#btn-pause-save');
     await clickEl('#btn-slot-2');
     check('saved to slot 2', await ev('localStorage.getItem("halcyon-heat-slot-2") !== null'));
