@@ -68,6 +68,9 @@ export async function stageShot(name, G) {
     G.traffic.spawnCar({ x: x0 + 48, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 1 }, 'taxi');
     G.traffic.spawnCar({ x: x0 + 70, z: layout.oceanZ + 1.75, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 0 }, 'sedan');
     G.traffic.spawnCar({ x: x0 - 70, z: layout.oceanZ - 5.25, yaw: -Math.PI / 2, node: G.nav.node(3, 9), dir: 'w', lane: 1 }, 'van');
+    // Oncoming traffic in the far lane beside the camera, so the drive reads as a busy street.
+    const passing = G.traffic.spawnCar({ x: x0 - 4, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 1 }, 'pickup');
+    passing.vx = 9;
     const from = { x: x0 + 6, z };
     crowd(G, [
       [x0 - 15, layout.oceanZ - 9, false], [x0 - 19, layout.oceanZ - 8.4, false], [x0 - 9, layout.oceanZ - 9.6, true], [x0 + 2, layout.oceanZ - 8.8, false], [x0 + 10, layout.oceanZ - 9.2, true],

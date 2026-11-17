@@ -723,6 +723,16 @@ async function main() {
     check('load restores position, money and time', near(s.x, saved.x, 1) && near(s.z, saved.z, 1) && s.money === savedMoney && near(await ev('__game.world.sky.hour'), await ev('(() => JSON.parse(localStorage.getItem("halcyon-heat-slot-2")).hour)()'), 0.05), `pos ${s.x.toFixed(1)},${s.z.toFixed(1)} vs ${saved.x.toFixed(1)},${saved.z.toFixed(1)}; money ${s.money}`);
     check('load restores missions and weapons', (await ev('__game.missions.completed.size')) === 7 && (await ev('__game.weapons.inv.shotgun.owned')));
     check('load keeps the game playing', (await ev('__game.state')) === 'playing');
+    // Save while driving: the car comes back with the player inside it.
+    await ev('(() => { const G = __game; const L = G.world.layout; const v = G.fleet.spawn("pickup", L.roadX(6) + 1.75, L.roadZ(5) + 25, Math.PI, { role: "player", owner: "player", color: "#2f4858" }); G.player.teleport(v.x + 2.5, v.z, 0); G.player.enterVehicle(v); })()');
+    await adv(0.2);
+    await ev('__game.save.write(3); 0');
+    await ev('(() => { const G = __game; G.player.exitVehicle(); G.player.teleport(G.player.x + 90, G.player.z + 30, 0); })()');
+    await ev('__game.save.load(3); 0');
+    await adv(0.2);
+    const inCar = await ev('(() => { const G = __game; const v = G.player.vehicle; return { pstate: G.player.state, type: v ? v.type : null, color: v ? v.color : null, x: v ? v.x : 0, z: v ? v.z : 0, tx: G.world.layout.roadX(6) + 1.75, tz: G.world.layout.roadZ(5) + 25 }; })()');
+    check('loading a save made in a car restores the car and the seat', inCar.pstate === 'car' && inCar.type === 'pickup' && inCar.color === '#2f4858' && near(inCar.x, inCar.tx, 1.5) && near(inCar.z, inCar.tz, 1.5), JSON.stringify(inCar));
+    check('audio context running in the test browser', await ev('__game.audio.ready'), String(await ev('__game.audio.context && __game.audio.context.state')));
     // Quit to title, Continue loads the latest save.
     await tap('Escape');
     await clickEl('#btn-pause-quit-to-title');

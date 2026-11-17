@@ -384,7 +384,12 @@ window.addEventListener('keydown', () => G.audio.unlock(), { once: false });
 
 /** The test harness: advance the simulation deterministically and render on demand. */
 G.advance = (seconds, stepSize = PHYSICS.subStep) => {
-  if (G.state !== 'playing') return;
+  handleFrameKeys();
+  if (G.state !== 'playing') {
+    // The press was consumed here; the frame loop must not act on it again.
+    G.input.endFrame(G.world.time);
+    return;
+  }
   let left = seconds;
   while (left > 1e-6) {
     const dt = Math.min(PHYSICS.maxFrame, left);
