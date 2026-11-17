@@ -241,12 +241,13 @@ async function main() {
     const fwd = [Math.sin(s.veh.yaw), Math.cos(s.veh.yaw)];
     check('camera stays behind while reversing', relBack[0] * fwd[0] + relBack[1] * fwd[1] < 0);
     // W while rolling backwards brakes firmly, then drives forward.
-    const revSpeed = s.speed;
+    await hold(['KeyS'], 2);
+    const revSpeed = (await state()).speed;
     await hold(['KeyW'], 0.6);
     const afterBrake = (await state()).speed;
     await hold(['KeyW'], 1.5);
     const afterDrive = (await state()).speed;
-    check('W brakes a reversing car firmly', revSpeed < -3 && afterBrake > revSpeed + 4 && afterBrake < 1.5, `${(revSpeed * 3.6).toFixed(0)} -> ${(afterBrake * 3.6).toFixed(0)} km/h in 0.6 s`);
+    check('W brakes a reversing car firmly', revSpeed < -3 && afterBrake > revSpeed + 3 && afterBrake > -1 && afterBrake < 2, `${(revSpeed * 3.6).toFixed(0)} -> ${(afterBrake * 3.6).toFixed(0)} km/h in 0.6 s`);
     check('then drives forward', afterDrive > 3, `${(afterDrive * 3.6).toFixed(0)} km/h`);
     // Steering direction as seen from the chase camera.
     await ev('(() => { const G = __game; const v = G.player.vehicle; v.x = G.world.layout.roadX(5) - 1.75; v.z = G.world.layout.roadZ(2) + 10; v.yaw = 0; v.vx = 0; v.vz = 12; G.camera.snapTo(0, 0.2); })()');

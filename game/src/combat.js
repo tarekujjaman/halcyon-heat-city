@@ -66,7 +66,8 @@ export function createCombat(G) {
       } else if (hit.kind === 'vehicle') {
         const v = hit.target;
         G.effects.hitSparks(pt.x, pt.y, pt.z);
-        api.damageVehicle(v, damage * 0.35, shooter);
+        // Bullets dent bodywork; crashes are what wreck a car (a chase under fire should last).
+        api.damageVehicle(v, damage * DAMAGE.bulletToCar, shooter);
         if (shooter === G.player && v.driver && v.driver.kind === 'officer') G.wanted.crime('shootPolice', v.x, v.z);
         if (shooter === G.player && v.driver && v.driver.kind === 'ped') G.traffic.scareDriver(v);
       } else if (hit.kind === 'person') {

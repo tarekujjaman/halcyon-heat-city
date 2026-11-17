@@ -168,12 +168,27 @@ export function collideStatic(v, colliders, hits = []) {
   return hardest;
 }
 
-/** Damage from one impact at `closing` m/s, once per cooldown; scrapes under the dead zone are free. */
+/** Crash damage for a closing speed: nothing under the scrape dead zone, capped at crashMax. */
+function crashDamage(closing) {
+  return Math.min(DAMAGE.crashMax, Math.max(0, closing - DAMAGE.scrapeSpeed) * DAMAGE.crashScale);
+}
+
+/**
+ * Damage from one impact at `closing` m/s. One hit per cooldown, so a bounce along a wall is
+ * not charged twice; but a harder hit inside the cooldown (a post clipped on the way into a
+ * wall) is charged the difference, so the wall is never free. Scrapes under the dead zone cost nothing.
+ */
 export function applyImpact(v, closing, other) {
   if (closing < DAMAGE.scrapeSpeed) return 0;
-  if (v.impactTimer > 0) return 0;
+  const full = crashDamage(closing);
+  let dmg = full;
+  if (v.impactTimer > 0) {
+    const charged = v.impactCharged || 0;
+    if (full <= charged + 1) return 0;
+    dmg = full - charged;
+  }
   v.impactTimer = DAMAGE.impactCooldown;
-  const dmg = Math.min(DAMAGE.crashMax, (closing - DAMAGE.scrapeSpeed) * DAMAGE.crashScale);
+  v.impactCharged = full;
   damageVehicle(v, dmg, other || 'crash');
   v.lastImpact = { closing, dmg, at: performance.now() };
   return dmg;
@@ -240,10 +255,11 @@ export function collidePair(a, b, pairTimers, now) {
     const last = pairTimers.get(key) || -Infinity;
     if (closing >= DAMAGE.scrapeSpeed && now - last >= DAMAGE.pairCooldown) {
       pairTimers.set(key, now);
-      // Car-to-car hits hurt less than walls: bodywork gives, and a chase should last.
-      const dmg = Math.min(DAMAGE.crashMax * 0.6, (closing - DAMAGE.scrapeSpeed) * DAMAGE.crashScale * DAMAGE.carToCar);
-      damageVehicle(a, dmg * Math.min(1.3, mb / ma), b);
-      damageVehicle(b, dmg * Math.min(1.3, ma / mb), a);
+      // Car-to-car hits hurt less than walls: bodywork gives, and a chase should last. The
+      // heavier car hurts the lighter one a little more, within a cap.
+      const dmg = Math.min(DAMAGE.crashMax * 0.5, (closing - DAMAGE.scrapeSpeed) * DAMAGE.crashScale * DAMAGE.carToCar);
+      damageVehicle(a, dmg * Math.min(1.15, mb / ma), b);
+      damageVehicle(b, dmg * Math.min(1.15, ma / mb), a);
       a.lastImpact = { closing, dmg, at: now, other: b };
       b.lastImpact = { closing, dmg, at: now, other: a };
       return closing;
