@@ -694,7 +694,7 @@ async function main() {
     // ---------------------------------------------------------------- map, pause, save and load
     section('menus');
     await tap('KeyM');
-    check('M opens the map', (await ev('__game.state')) === 'map' && !(await ev('document.getElementById("mapscreen").classList.contains("hidden"))')));
+    check('M opens the map', (await ev('__game.state')) === 'map' && !(await ev('document.getElementById("mapscreen").classList.contains("hidden")')));
     check('map lists story progress', (await ev('document.getElementById("map-side").textContent')).includes('Welcome Home'));
     const mapRect = await ev('(() => { const r = document.getElementById("map-canvas").getBoundingClientRect(); return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.5 }; })()');
     await page.mouse('mousePressed', mapRect.x, mapRect.y, { button: 'left', clickCount: 1 });
