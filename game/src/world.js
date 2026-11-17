@@ -1,6 +1,7 @@
-// The world: the scene with the city built from the seeded plan (ground, roads, buildings, props,
-// beach and sea), the static colliders, the sky and clock, and the per-frame update of what moves
-// in the scenery (water, ferris wheel, lights by time of day).
+// The world of Halcyon Bay: one scene holding the city built from the seeded plan (ground, roads,
+// buildings, props, beach and sea), the static colliders every mover collides with, the sign
+// atlas, the sky with its clock and lighting, and the per-frame tick of what moves in the
+// scenery (water, ferris wheel, lamps by time of day). Exports createWorld(seed).
 import * as THREE from 'three';
 import { buildLayout } from './city/layout.js';
 import { buildGround } from './city/ground.js';
@@ -13,6 +14,12 @@ import { StaticColliders } from './collision.js';
 import { createTextureSet } from './textures.js';
 import { createSky } from './sky.js';
 
+/**
+ * Build the whole static world for `seed`. Returns {scene, textures, layout, colliders, signs,
+ * sky, props, beach, buildings, time, update(dt, focus, cameraPos)}: `layout` is the pure street
+ * plan the AI and the maps read, `colliders` the spatial hash, and `time` the seconds the world
+ * has run (the clock the waves and the animated props follow).
+ */
 export function createWorld(seed) {
   const scene = new THREE.Scene();
   const textures = createTextureSet();
@@ -38,12 +45,17 @@ export function createWorld(seed) {
     get time() {
       return time;
     },
-    /** Scenery animation and lighting for the frame; `focus` is the player's position. */
+    /**
+     * Scenery animation and lighting for one step of dt seconds: the sky's clock and sun follow
+     * `focus` (the player's position, where the shadow map is centred) and the water follows the
+     * sky's light and the camera at `cameraPos`.
+     */
     update(dt, focus, cameraPos) {
       time += dt;
       sky.update(dt, focus);
       beach.update(dt, time, cameraPos);
-      beach.setLighting(sky.state.sunDir, sky.state.sunColor, sky.state.top, sky.state.fogColor, scene.fog.near, scene.fog.far);
+      const fog = scene.fog;
+      beach.setLighting(sky.state.sunDir, sky.state.sunColor, sky.state.top, sky.state.fogColor, fog ? fog.near : 200, fog ? fog.far : 900);
     },
   };
   return world;

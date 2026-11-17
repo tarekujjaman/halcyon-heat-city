@@ -1,6 +1,13 @@
-// Seeded random numbers (mulberry32): the city, traffic and screenshot scenes are the same for the
-// same seed, so a layout bug or a screenshot can be reproduced exactly.
+// Seeded random numbers (mulberry32) for the whole game: the city plan, textures, traffic and
+// screenshot scenes come out the same for the same seed, so a layout bug or a screenshot can be
+// reproduced exactly. Exports createRng (an independent generator), the shared run-time
+// generator behind frand/frange/fpick (seedShared fixes it for the scripted scenes), and hash2.
 
+/**
+ * An independent generator for `seed` (any number; 0 and NaN become 1): {next() in [0, 1),
+ * range(lo, hi), int(lo, hi) inclusive, pick(list), chance(p), sign(), shuffle(list) in place}.
+ * Each call advances the stream, so the order of calls is part of what a seed reproduces.
+ */
 export function createRng(seed) {
   let a = (seed >>> 0) || 1;
   const next = () => {
@@ -30,20 +37,31 @@ export function createRng(seed) {
 
 /** The shared generator for run-time variety (traffic colours, particle jitter, AI choices); seeded in screenshot scenes. */
 let shared = createRng(Math.floor(Math.random() * 4294967296));
+
+/** Restart the shared generator from `seed`: the playtest and the screenshot scenes call this at boot. */
 export function seedShared(seed) {
   shared = createRng(seed);
 }
+
+/** The next shared draw in [0, 1). */
 export function frand() {
   return shared.next();
 }
+
+/** A shared draw in [lo, hi). */
 export function frange(lo, hi) {
   return lo + shared.next() * (hi - lo);
 }
+
+/** A shared pick from `list` (undefined for an empty list). */
 export function fpick(list) {
   return list[Math.floor(shared.next() * list.length)];
 }
 
-/** A fast integer hash for picking per-cell variation without carrying a generator around. */
+/**
+ * A fast integer hash of (x, y, seed) to [0, 1): per-cell variation (window offsets, scattered
+ * props) without carrying a generator around. Stable across loads, so it shapes the city too.
+ */
 export function hash2(x, y, seed = 0) {
   let h = (x * 374761393 + y * 668265263 + seed * 1442695041) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);

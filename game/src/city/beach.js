@@ -1,10 +1,20 @@
-// Coral Strand's beach and the sea: sloping sand, the animated water shader with sun glitter and
-// shore foam, Halcyon Pier on its pylons with the pavilion, the turning ferris wheel, umbrellas,
-// towels and the lifeguard tower.
+// Coral Strand's beach and the sea: the sloping sand, the animated water shader with sun glitter
+// and shore foam, Halcyon Pier on its pylons with the pavilion at its tip, the turning ferris
+// wheel, umbrellas, towels and the lifeguard tower. Exports buildBeach(layout, textures,
+// colliders), whose result the world ticks (update) and relights by time of day (setLighting).
 import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { MeshBatch } from './batch.js';
 import { createRng } from '../rng.js';
+
+const PIER_WIDTH = 11;
+const WHEEL_RADIUS = 13;
+/** Radians per second the ferris wheel turns. */
+const WHEEL_SPIN = 0.12;
+const UMBRELLA_SPOTS = 44;
+const UMBRELLA_COLORS = ['#ff6b6b', '#ffd93d', '#6bcbff', '#ff9ff3', '#7bed9f', '#ffffff'];
+const GONDOLA_COLORS = ['#ff6b6b', '#ffd93d', '#6bcbff', '#7bed9f'];
+const TAU = Math.PI * 2;
 
 const WATER_VERT = `
 uniform float uTime;
@@ -57,6 +67,11 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
+/**
+ * Build the beach, sea, pier and ferris wheel into one Group. Returns {group, water, update(dt,
+ * time, cameraPos), setLighting(sunDir, sunColor, skyColor, fogColor, fogNear, fogFar)}: the
+ * water shader needs the clock, the camera and the sky's current light every frame.
+ */
 export function buildBeach(layout, textures, colliders) {
   const group = new THREE.Group();
   const rng = createRng(layout.seed + 303);
@@ -108,11 +123,11 @@ export function buildBeach(layout, textures, colliders) {
   group.add(sea);
 
   // Halcyon Pier: planks on pylons, railings, lamps, a pavilion at the end.
-  const pier = layout.landmarks;
-  const px = pier.pier.x;
-  const pz1 = pier.pierStart.z;
-  const pz2 = pier.pierTip.z;
-  const pw = 11;
+  const L = layout.landmarks;
+  const px = L.pier.x;
+  const pz1 = L.pierStart.z;
+  const pz2 = L.pierTip.z;
+  const pw = PIER_WIDTH;
   wood.box(px - pw / 2, 0.14, pz1, pw, 0.5, pz2 - pz1, '#ffffff', [1.2, 1.2]);
   for (let z = pz1 + 6; z < pz2; z += 8) {
     wood.cylinder(px - pw / 2 + 1, -3, z, 0.4, 0.4, 3.6, 6, '#6b4f30');
@@ -139,20 +154,19 @@ export function buildBeach(layout, textures, colliders) {
   // The ferris wheel east of the pier on the sand: static frame, turning wheel.
   const wheel = buildFerrisWheel(flat, px + 44, layout.sandZ + 26, colliders);
 
-  // Umbrellas, towels and a lifeguard tower.
-  const umbrellaColors = ['#ff6b6b', '#ffd93d', '#6bcbff', '#ff9ff3', '#7bed9f', '#ffffff'];
-  for (let k = 0; k < 44; k += 1) {
+  // Umbrellas, towels and a lifeguard tower (the seeded draws here fix where every towel lies).
+  for (let k = 0; k < UMBRELLA_SPOTS; k += 1) {
     const ux = CITY.x0 + 30 + rng.range(0, CITY.width - 60);
     const uz = layout.sandZ + 14 + rng.range(0, CITY.beachWidth - 30);
     if (Math.abs(ux - px) < 10) continue;
     const y = layout.groundHeight(ux, uz);
-    const color = rng.pick(umbrellaColors);
+    const color = rng.pick(UMBRELLA_COLORS);
     if (rng.chance(0.65)) {
       flat.cylinder(ux, y, uz, 0.06, 0.05, 2.4, 5, '#555');
       flat.cylinder(ux, y + 1.8, uz, 1.6, 0.05, 0.7, 10, color);
       colliders.addCircle(ux, uz, 0.15, 2.4, 'umbrella');
     }
-    flat.rotatedFloor(ux + rng.range(-2, 2), y + 0.03, uz + rng.range(1, 2.5), 1.0, 2.0, rng.range(0, 1), rng.pick(umbrellaColors));
+    flat.rotatedFloor(ux + rng.range(-2, 2), y + 0.03, uz + rng.range(1, 2.5), 1.0, 2.0, rng.range(0, 1), rng.pick(UMBRELLA_COLORS));
   }
   const lg = { x: CITY.x0 + CITY.width * 0.3, z: layout.sandZ + 30 };
   const lgy = layout.groundHeight(lg.x, lg.z);
@@ -172,11 +186,13 @@ export function buildBeach(layout, textures, colliders) {
   return {
     group,
     water,
+    /** Advance the waves to `time` seconds, aim the water's view term at the camera, turn the wheel. */
     update(dt, time, cameraPos) {
       water.uniforms.uTime.value = time;
       water.uniforms.uCamera.value.copy(cameraPos);
-      wheel.mesh.rotation.z += dt * 0.12;
+      wheel.mesh.rotation.z = (wheel.mesh.rotation.z + dt * WHEEL_SPIN) % TAU;
     },
+    /** Match the water to the sky: sun direction and colour, sky tint, and the scene fog it fades into. */
     setLighting(sunDir, sunColor, skyColor, fogColor, fogNear, fogFar) {
       water.uniforms.uSunDir.value.copy(sunDir);
       water.uniforms.uSunColor.value.copy(sunColor);
@@ -188,8 +204,12 @@ export function buildBeach(layout, textures, colliders) {
   };
 }
 
+/**
+ * The ferris wheel: its static A-frame and base go into `flat` (and a collider); the turning
+ * wheel (spokes, rim, gondolas, hub) is its own mesh built about the origin and placed at the hub.
+ */
 function buildFerrisWheel(flat, x, z, colliders) {
-  const R = 13;
+  const R = WHEEL_RADIUS;
   const hubY = R + 3;
   // Static A-frame supports.
   for (const s of [-1, 1]) {
@@ -217,7 +237,7 @@ function buildFerrisWheel(flat, x, z, colliders) {
     // Gondola hanging at the rim.
     const gx = c * (R - 0.4);
     const gy = s * (R - 0.4);
-    w.box(gx - 0.9, gy - 1.8, -1.0, 1.8, 1.6, 2.0, ['#ff6b6b', '#ffd93d', '#6bcbff', '#7bed9f'][k % 4]);
+    w.box(gx - 0.9, gy - 1.8, -1.0, 1.8, 1.6, 2.0, GONDOLA_COLORS[k % GONDOLA_COLORS.length]);
   }
   // Rim ring as short boxes.
   const rimSegs = 36;
