@@ -1,27 +1,35 @@
 // Keyboard and mouse: held keys, one-frame presses, pointer lock with a drag-to-look and
-// edge-turn fallback when the browser refuses it, mouse wheel for weapons, and the settings
-// (sensitivity, invert Y) the camera reads. Nothing here knows what the keys do.
+// edge-turn fallback when the browser refuses it, the click that recaptures the mouse after a
+// menu (never a shot), the lock-lost signal the pause menu listens for, mouse wheel for weapons,
+// and the settings (sensitivity, invert Y) the camera reads. Nothing here knows what the keys do.
 
 export const KEYS = {
   forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', run: 'ShiftLeft', jump: 'Space',
   enter: 'KeyF', interact: 'KeyE', radio: 'KeyR', map: 'KeyM', pause: 'Escape', horn: 'KeyH',
   handbrake: 'Space', lookLeft: 'ArrowLeft', lookRight: 'ArrowRight', lookUp: 'ArrowUp', lookDown: 'ArrowDown',
-  turnLeft: 'KeyQ', turnRight: 'KeyE', weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4',
+  weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4',
   reload: 'KeyR', save: 'F5', camera: 'KeyV', punch: 'KeyG', dialogueSkip: 'Enter',
 };
+
+/** Default look speed in radians per pixel of mouse travel (the settings slider shows it x1000). */
+export const DEFAULT_SENSITIVITY = 0.0025;
 
 export function createInput(canvas) {
   const down = new Set();
   const pressed = new Set();
   const released = new Set();
+  const lockLostHandlers = [];
   const state = {
     down, pressed,
     mouseDX: 0, mouseDY: 0, wheel: 0,
     buttons: 0, clicked: false, rightClicked: false,
     locked: false, lockRefused: false, wantLock: false,
+    // needClick: the game resumed and waits for a click on the canvas to take the mouse again.
+    // captureClick: that click is being held; it must not fire a weapon.
+    needClick: false, captureClick: false,
     cursorX: 0, cursorY: 0, cursorInside: false,
     lastClientX: null, lastClientY: null,
-    settings: { sensitivity: 0.004, invertY: false },
+    settings: { sensitivity: DEFAULT_SENSITIVITY, invertY: false },
     enabled: true,
     lastMouseMoveAt: -Infinity,
     now: 0,
@@ -42,6 +50,7 @@ export function createInput(canvas) {
   window.addEventListener('blur', () => {
     down.clear();
     state.buttons = 0;
+    state.captureClick = false;
   });
 
   function onMouseMove(e) {
@@ -65,17 +74,28 @@ export function createInput(canvas) {
     state.lastClientY = e.clientY;
   }
   function onMouseDown(e) {
-    state.buttons = e.buttons || (e.button === 2 ? 2 : e.button === 1 ? 4 : 1);
     state.lastClientX = e.clientX;
     state.lastClientY = e.clientY;
+    // Clicks on menus and the map are theirs; only the game canvas shoots or captures.
+    if (!(e.target === canvas || canvas.contains(e.target))) return;
+    if (e.button === 0 && state.wantLock && !state.locked) {
+      // The click that asks for the mouse back is swallowed: it never fires a weapon. Once the
+      // browser has refused the lock, later clicks shoot (and quietly ask again).
+      const swallow = state.needClick || !state.lockRefused;
+      state.needClick = false;
+      requestLock();
+      if (swallow) {
+        state.captureClick = true;
+        return;
+      }
+    }
+    state.buttons = e.buttons || (e.button === 2 ? 2 : e.button === 1 ? 4 : 1);
     if (e.button === 0) state.clicked = true;
     if (e.button === 2) state.rightClicked = true;
-    if (e.target === canvas || canvas.contains(e.target)) {
-      if (state.wantLock && !state.locked) requestLock();
-    }
   }
   function onMouseUp(e) {
     state.buttons = e.buttons || 0;
+    state.captureClick = false;
   }
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mousedown', onMouseDown);
@@ -86,12 +106,22 @@ export function createInput(canvas) {
   window.addEventListener('wheel', (e) => { state.wheel += Math.sign(e.deltaY); }, { passive: true });
 
   document.addEventListener('pointerlockchange', () => {
+    const was = state.locked;
     state.locked = document.pointerLockElement === canvas;
-    if (state.locked) state.lockRefused = false;
+    if (state.locked) {
+      state.lockRefused = false;
+      state.lockPendingSince = undefined;
+    } else if (was && state.wantLock) {
+      // The browser took the lock away (Esc, alt-tab) while the game still wanted it: the
+      // Escape key itself is often not delivered, so this is the pause signal.
+      state.needClick = true;
+      for (const fn of lockLostHandlers) fn();
+    }
   });
   document.addEventListener('pointerlockerror', () => {
     state.locked = false;
     state.lockRefused = true;
+    state.lockPendingSince = undefined;
   });
 
   function requestLock() {
@@ -135,8 +165,8 @@ export function createInput(canvas) {
       state.wheel = 0;
       return w;
     },
-    fireHeld: () => state.enabled && (state.buttons & 1) !== 0,
-    clicked: () => state.clicked,
+    fireHeld: () => state.enabled && !state.captureClick && (state.buttons & 1) !== 0,
+    clicked: () => state.clicked && !state.captureClick,
     /** -1, 0 or 1: the cursor at the window's left or right edge while the pointer is not captured. */
     edgeTurn(width, zone) {
       if (state.locked || !state.cursorInside) return 0;
@@ -150,14 +180,30 @@ export function createInput(canvas) {
     get lockRefused() {
       return state.lockRefused;
     },
-    /** Ask for the pointer while playing; the next click asks again if the browser declined. */
+    /** True while the game waits for the click that takes the mouse back ("Click to resume"). */
+    get needsClick() {
+      return state.needClick && !state.locked;
+    },
+    /** Ask for the pointer now (inside a click or key gesture, such as the New Game button). */
     captureMouse() {
       state.wantLock = true;
+      state.needClick = false;
       requestLock();
+    },
+    /** Want the pointer, but wait for the player's click to take it (resuming from a menu). */
+    askCapture() {
+      state.wantLock = true;
+      state.needClick = !state.locked;
     },
     releaseMouse() {
       state.wantLock = false;
+      state.needClick = false;
+      state.captureClick = false;
       exitLock();
+    },
+    /** Called when the browser drops the lock while the game still wants it. */
+    onLockLost(fn) {
+      lockLostHandlers.push(fn);
     },
     setEnabled(v) {
       state.enabled = v;

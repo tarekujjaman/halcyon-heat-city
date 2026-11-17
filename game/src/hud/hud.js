@@ -174,8 +174,10 @@ export function createHud(G) {
       if (p.state === 'car' && v) {
         dom.speed.classList.remove('hidden');
         dom.speedValue.textContent = String(Math.round(speedKmh(v)));
-        dom.vehicleName.textContent = v.spec.name + (v.hp < 38 ? '  ⚠ DAMAGED' : '');
-        dom.vehicleName.classList.toggle('warn', v.hp < 38);
+        const fire = v.onFire ? `  ⚠ ON FIRE ${Math.max(0, Math.ceil(v.fuse))} s` : v.hp < 38 ? '  ⚠ DAMAGED' : '';
+        dom.vehicleName.textContent = v.spec.name + fire;
+        dom.vehicleName.classList.toggle('warn', v.hp < 38 || v.onFire);
+        dom.vehicleName.classList.toggle('fire', !!v.onFire);
         dom.radio.classList.remove('hidden');
         dom.radioName.textContent = G.radio.stationName();
         dom.radio.classList.toggle('off', !G.radio.playing);
@@ -246,8 +248,10 @@ export function createHud(G) {
       // Crosshair when armed on foot.
       const armed = p.state === 'foot' && G.weapons.current !== 'fists';
       dom.crosshair.classList.toggle('hidden', !armed);
-      // Pointer prompt.
-      const needPrompt = !G.input.locked && !G.input.lockRefused && G.state === 'playing' && !G.input.state.testMode;
+      // Pointer prompt: "Click to resume" after a menu, else the first capture of a session.
+      const needsClick = G.input.needsClick;
+      const needPrompt = G.state === 'playing' && !G.input.locked && (needsClick || !G.input.lockRefused) && !G.input.state.testMode;
+      dom.prompt.textContent = needsClick ? 'Click to resume' : 'Click to control the camera';
       dom.prompt.classList.toggle('hidden', !needPrompt);
       // Arrest bar.
       const ap = G.police.arrestProgress();

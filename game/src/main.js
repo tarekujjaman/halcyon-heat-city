@@ -1,5 +1,6 @@
 // HALCYON HEAT boot and game loop. Builds Halcyon Bay and every system, runs the title screen,
-// new game / continue / load, the fixed-step simulation, pause, the map, hospital and arrest, and
+// new game / continue / load, the fixed-step simulation, pause (also when the browser drops the
+// pointer lock), the click that resumes, the map, hospital and arrest, the car-fire warning, and
 // exposes window.__game for the playtest and the screenshot scenes (?shot=name&seed=n, ?test=1).
 import * as THREE from 'three';
 import { storyMissions } from './missions/story.js';
@@ -124,6 +125,19 @@ G.events.on('arrested', () => {
   G.activities.abortAll();
   G.arrestTimer = 1.6;
 });
+// The one place the fire warning comes from, whatever set the car alight (a crash, bullets, a
+// blast): the moment the fuse starts, so the driver always gets the whole fuse to get out.
+G.fleet.onIgnite((v) => {
+  if (v.driver !== G.player) return;
+  G.notify('Car on fire! Get out!');
+  G.hud.banner('GET OUT', 'The car is about to explode', 'failed');
+  G.audio.play('wantedUp');
+});
+// Browsers release the pointer on Esc without always delivering the key: losing the lock while
+// playing opens the pause menu.
+G.input.onLockLost(() => {
+  if (G.state === 'playing') G.pause();
+});
 
 function applySettings(s) {
   Object.assign(G.settings, s);
@@ -156,13 +170,19 @@ G.resetWorldState = () => {
   G.arrestTimer = 0;
 };
 
-function startPlaying() {
+/**
+ * Back to the game. From a button or key gesture the mouse is captured at once; `askClick`
+ * (resuming from the pause menu, the hospital or an arrest) waits for the player's click instead,
+ * and that click never fires a weapon.
+ */
+function startPlaying(askClick = false) {
   G.state = 'playing';
   G.menus.hide();
   G.mapscreen.hide();
   G.hud.show(true);
   G.audio.unlock();
-  G.input.captureMouse();
+  if (askClick) G.input.askCapture();
+  else G.input.captureMouse();
   G.input.setEnabled(true);
 }
 
@@ -209,7 +229,7 @@ G.pause = () => {
 G.resume = () => {
   G.menus.hide();
   G.mapscreen.hide();
-  startPlaying();
+  startPlaying(true);
 };
 G.pauseFor = (kind) => {
   G.state = kind === 'death' ? 'death' : 'menu';
@@ -312,7 +332,6 @@ function handleFrameKeys() {
     if (input.wasPressed(KEYS.map)) { G.openMap(); return; }
     if (input.wasPressed(KEYS.radio) && G.player.state === 'car') { G.radio.next(); G.notify(`Radio: ${G.radio.stationName()}`); }
     if (input.wasPressed(KEYS.dialogueSkip)) G.hud.skipLine();
-    if (input.clicked() && !input.locked) input.captureMouse();
   } else if (G.state === 'map') {
     if (input.wasPressed(KEYS.map) || input.wasPressed(KEYS.pause)) G.closeMap();
   } else if (G.state === 'paused' || G.state === 'menu') {

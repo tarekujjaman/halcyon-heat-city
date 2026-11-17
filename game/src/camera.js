@@ -1,5 +1,6 @@
-// The third-person camera: a free 360-degree orbit from the mouse on foot and in a car, smoothed,
-// with edge-turn and arrow-key turning when the pointer is not captured, a chase mode that eases
+// The third-person camera: a free 360-degree orbit from the mouse on foot and in a car, smoothed
+// on the raw yaw so a fast flick never swings the short way round, with edge-turn and arrow-key
+// turning when the pointer is not captured, a chase mode that eases
 // back behind the car once the mouse rests, speed-eased distance and field of view, and a wall
 // check that pulls the camera in rather than through a building.
 import * as THREE from 'three';
@@ -54,8 +55,10 @@ export function createCamera(aspect) {
       return state.forward;
     },
     snapTo(yaw, pitch = 0.22) {
-      state.yaw = yaw;
-      state.targetYaw = yaw;
+      // Snapping to an angle given in another winding must not spin the camera a full turn.
+      const wound = state.yaw + shortestAngle(state.yaw, yaw);
+      state.yaw = wound;
+      state.targetYaw = wound;
       state.pitch = pitch;
       state.targetPitch = pitch;
     },
@@ -73,14 +76,11 @@ export function createCamera(aspect) {
       const sens = input.state.settings.sensitivity;
       const look = input.takeLook();
       applyLook(look.dx, look.dy, sens);
-      // Arrow keys, Q/E and the window edges turn the view when the pointer is not captured.
+      // The arrow keys and the window edges turn the view when the pointer is not captured
+      // (E stays the interact key, so Q/E never steer the camera).
       let keyTurn = 0;
       if (input.isDown(KEYS.lookLeft)) keyTurn -= 1;
       if (input.isDown(KEYS.lookRight)) keyTurn += 1;
-      if (!input.locked && mode === 'foot') {
-        if (input.isDown(KEYS.turnLeft)) keyTurn -= 1;
-        if (input.isDown(KEYS.turnRight)) keyTurn += 1;
-      }
       let keyTilt = 0;
       if (input.isDown(KEYS.lookUp)) keyTilt -= 1;
       if (input.isDown(KEYS.lookDown)) keyTilt += 1;
@@ -111,9 +111,17 @@ export function createCamera(aspect) {
           state.targetPitch += (0.2 - state.targetPitch) * k;
         }
       }
+      // Smooth on the raw difference, not the shortest angle: a fast flick of more than a half
+      // turn must swing the way the mouse went, never snap round the short way.
       const smooth = 1 - Math.exp(-dt * CAMERA.smoothing);
-      state.yaw += shortestAngle(state.yaw, state.targetYaw) * smooth;
+      state.yaw += (state.targetYaw - state.yaw) * smooth;
       state.pitch += (state.targetPitch - state.pitch) * smooth;
+      // Keep both angles bounded by wrapping them together, which changes nothing visible.
+      if (Math.abs(state.yaw) > Math.PI * 4) {
+        const wrap = Math.round(state.yaw / (Math.PI * 2)) * Math.PI * 2;
+        state.yaw -= wrap;
+        state.targetYaw -= wrap;
+      }
       const ease = 1 - Math.exp(-dt * 4);
       state.distance += (dist - state.distance) * ease;
       state.fov += (fov - state.fov) * ease;

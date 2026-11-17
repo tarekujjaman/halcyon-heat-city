@@ -15,18 +15,21 @@ textures, synthesized sound and three procedural radio stations. No network requ
 
 | Key | Action |
 | --- | --- |
-| W A S D | Walk / drive (S brakes, then reverses) |
+| W A S D | Walk / drive (S brakes, then reverses; W brakes a reversing car, then drives) |
 | Shift | Run |
 | Space | Jump on foot, handbrake in a car |
-| Mouse | Look around (click the game to capture the pointer) |
-| Left click | Punch or shoot |
+| Mouse | Look around (click the game to capture the pointer; after a menu, click once to resume) |
+| Left click | Punch or shoot (the click that recaptures the mouse never fires) |
 | 1 2 3 4, wheel | Weapons |
-| F | Steal or enter a car, get out |
+| F or E | Steal or enter a car, get out |
 | R | Next radio station |
 | M | Map and waypoints |
 | H | Horn |
-| Esc | Pause, save, settings |
-| Arrows, Q / E | Turn the camera without the mouse |
+| Esc | Pause, save, settings (releasing the pointer with Esc also pauses) |
+| Arrow keys | Turn the camera without the mouse |
+
+Settings (Esc, or the title screen) has master and music volume, a mouse sensitivity slider from 1 to 12
+(radians per pixel x1000, default 2.5), Invert Y and shadows. Settings are saved in the browser.
 
 ## Run it
 

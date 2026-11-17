@@ -48,7 +48,7 @@ export const PLAYER = {
 };
 
 export const CAMERA = {
-  sensitivity: 0.004,
+  sensitivity: 0.0025,
   smoothing: 18,
   minPitch: -0.5,
   maxPitch: 1.05,
@@ -78,6 +78,8 @@ export const DRIVING = {
   dragK: 0.0022,
   smokeSlip: 3.5,
   curbSpeedLoss: 0.9,
+  curbStep: 0.1,
+  curbCooldown: 0.35,
 };
 
 export const DAMAGE = {

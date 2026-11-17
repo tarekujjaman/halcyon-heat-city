@@ -6,9 +6,9 @@ import { GAME_TITLE, ECONOMY, WEAPONS } from './config.js';
 import { KEYS } from './input.js';
 
 const CONTROLS = [
-  ['W A S D', 'Walk / drive (S brakes, then reverses)'], ['Shift', 'Run'], ['Space', 'Jump / handbrake'], ['Mouse', 'Look around (click to capture)'],
-  ['Left click', 'Punch / shoot'], ['1 2 3 4 / wheel', 'Weapons'], ['F', 'Enter or steal a car / get out'], ['R', 'Radio station'],
-  ['M', 'Map and waypoints'], ['H', 'Horn'], ['Esc', 'Pause'], ['Arrows / Q E', 'Turn the camera without the mouse'],
+  ['W A S D', 'Walk / drive (S brakes, then reverses; W brakes a reversing car)'], ['Shift', 'Run'], ['Space', 'Jump / handbrake'], ['Mouse', 'Look around (click to capture; sensitivity in Settings)'],
+  ['Left click', 'Punch / shoot'], ['1 2 3 4 / wheel', 'Weapons'], ['F / E', 'Enter or steal a car / get out'], ['R', 'Radio station'],
+  ['M', 'Map and waypoints'], ['H', 'Horn'], ['Esc', 'Pause (click to resume)'], ['Arrow keys', 'Turn the camera without the mouse'],
 ];
 
 export function createMenus(G, root) {
@@ -139,7 +139,7 @@ export function createMenus(G, root) {
     <h1>SETTINGS</h1>
     <label class="setting"><span>Master volume</span><input type="range" id="set-volume" min="0" max="100" step="1"><b id="set-volume-v"></b></label>
     <label class="setting"><span>Music volume</span><input type="range" id="set-music" min="0" max="100" step="1"><b id="set-music-v"></b></label>
-    <label class="setting"><span>Mouse sensitivity</span><input type="range" id="set-sens" min="1" max="12" step="0.5"><b id="set-sens-v"></b></label>
+    <label class="setting"><span>Mouse sensitivity (default 2.5)</span><input type="range" id="set-sens" min="1" max="12" step="0.5"><b id="set-sens-v"></b></label>
     <label class="setting check"><span>Invert mouse Y</span><input type="checkbox" id="set-invert"></label>
     <label class="setting check"><span>Shadows</span><input type="checkbox" id="set-shadows"></label>
     <button class="btn back" id="settings-back">Back</button>`);
@@ -150,7 +150,9 @@ export function createMenus(G, root) {
     const p = panels.settings;
     p.querySelector('#set-volume').value = Math.round(s.volume * 100);
     p.querySelector('#set-music').value = Math.round(s.music * 100);
-    p.querySelector('#set-sens').value = s.sensitivity * 1000;
+    // The slider shows radians per pixel x1000 (1 to 12); a setting saved outside that range,
+    // or by an older build, is shown at the nearest step and keeps working as saved.
+    p.querySelector('#set-sens').value = Math.max(1, Math.min(12, Math.round(s.sensitivity * 2000) / 2));
     p.querySelector('#set-invert').checked = s.invertY;
     p.querySelector('#set-shadows').checked = s.shadows;
     updateSettingLabels();
