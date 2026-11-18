@@ -115,20 +115,39 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; fon
 
 /* Bottom right: speed, radio */
 #bottom-right { position: absolute; right: 24px; bottom: 24px; text-align: right; }
-#speedo { background: var(--ink); padding: 8px 16px; border-radius: 6px; border-right: 6px solid var(--sun); display: inline-block; }
-#speed-value { font: 900 54px var(--display); line-height: 1; }
-#speed-unit { font-size: 16px; font-weight: 800; margin-left: 4px; color: #ffe7a0; }
-#vehicle-name { font-size: 16px; font-weight: 700; color: #ddd; letter-spacing: 1px; }
+#speedo { background: var(--ink); padding: 8px 16px 10px; border-radius: 6px; border-right: 6px solid var(--sun); display: inline-block; min-width: 230px; text-align: right; }
+#vehicle-name { font-size: 15px; font-weight: 900; color: #ffe7a0; letter-spacing: 2px; text-transform: uppercase; }
 #vehicle-name.warn { color: #ff8a65; }
 #vehicle-name.fire { color: #ff5252; animation: pulse 0.4s infinite alternate; }
-#radio { margin-top: 10px; background: rgba(60, 20, 80, 0.75); padding: 6px 14px; border-radius: 6px; border-right: 6px solid var(--hot); display: inline-block; }
+#condition { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; }
+#condition .tag { font-size: 10px; letter-spacing: 3px; color: #cfd8e3; font-weight: 900; }
+#cond-bar { flex: 1; height: 8px; background: rgba(255,255,255,0.14); border-radius: 2px; overflow: hidden; }
+#cond-fill { display: block; height: 100%; width: 100%; background: #8bff6b; box-shadow: 0 0 6px rgba(139,255,107,0.8); }
+#cond-fill.mid { background: var(--sun); box-shadow: 0 0 6px rgba(255,179,71,0.8); }
+#cond-fill.low { background: #ff5252; box-shadow: 0 0 6px rgba(255,82,82,0.9); }
+#speed-row { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; }
+#speed-value { font: 900 58px var(--display); line-height: 1; letter-spacing: 1px; }
+#speed-unit { font-size: 16px; font-weight: 800; color: #ffe7a0; }
+#gear { font: 900 22px var(--display); color: #1a1004; background: var(--sun); text-shadow: none; padding: 0 8px; border-radius: 4px; margin-left: 8px; line-height: 1.3; align-self: center; }
+#radio { margin-top: 10px; background: rgba(60, 20, 80, 0.78); padding: 6px 14px 8px; border-radius: 6px; border-right: 6px solid var(--hot); display: inline-block; min-width: 230px; text-align: right; }
 #radio.off { opacity: 0.6; }
+#radio-head { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
 #radio-label { font-size: 12px; letter-spacing: 3px; color: var(--hot); font-weight: 800; }
+#radio-eq { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+#radio-eq i { display: block; width: 4px; height: 40%; background: var(--teal); border-radius: 1px; box-shadow: 0 0 4px var(--teal); }
 #radio-name { font-size: 20px; font-weight: 800; }
+#radio-track { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+#radio-song { font-size: 15px; font-weight: 800; color: #fff; }
+#radio-artist { font-size: 13px; font-weight: 700; color: #e3b8ff; letter-spacing: 1px; }
 
 /* Subtitles */
-#subtitles { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); max-width: 70vw; text-align: center; background: rgba(0,0,0,0.72); padding: 10px 22px; border-radius: 6px; font-size: 24px; font-weight: 700; line-height: 1.3; }
-#sub-speaker { font-weight: 900; margin-right: 10px; letter-spacing: 1px; }
+#subtitles { position: absolute; left: 50%; bottom: 168px; transform: translateX(-50%); max-width: 70vw; display: flex; align-items: center; gap: 14px; text-align: left; background: rgba(0,0,0,0.76); padding: 8px 20px 8px 8px; border-radius: 8px; border-left: 6px solid var(--sun); font-size: 24px; font-weight: 700; line-height: 1.25; }
+#sub-portrait { width: 72px; height: 72px; border-radius: 6px; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.35); image-rendering: auto; }
+#sub-body { display: flex; flex-direction: column; min-width: 0; }
+#sub-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+#sub-speaker { font-weight: 900; letter-spacing: 2px; text-transform: uppercase; font-size: 16px; }
+#sub-role { font-size: 12px; font-weight: 900; letter-spacing: 3px; color: #cfd8e3; }
+#sub-role::before { content: "-"; margin-right: 10px; color: #777; }
 
 /* Notifications */
 #notifications { position: absolute; right: 24px; top: 250px; width: 340px; text-align: right; }

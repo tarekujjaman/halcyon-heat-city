@@ -41,10 +41,18 @@
     <canvas id="minimap" width="240" height="240"></canvas>
   </div>
   <div id="bottom-right">
-    <div id="speedo"><span id="speed-value">0</span><span id="speed-unit">km/h</span><div id="vehicle-name"></div></div>
-    <div id="radio"><div id="radio-label">RADIO</div><div id="radio-name">Halcyon FM</div></div>
+    <div id="speedo">
+      <div id="vehicle-name"></div>
+      <div id="condition"><span class="tag">CONDITION</span><div id="cond-bar"><i id="cond-fill"></i></div></div>
+      <div id="speed-row"><span id="speed-value">0</span><span id="speed-unit">km/h</span><span id="gear">G1</span></div>
+    </div>
+    <div id="radio">
+      <div id="radio-head"><div id="radio-label">RADIO</div><div id="radio-eq"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div id="radio-name">Halcyon FM</div>
+      <div id="radio-track"><span id="radio-song"></span><span id="radio-artist"></span></div>
+    </div>
   </div>
-  <div id="subtitles" class="hidden"><span id="sub-speaker"></span><span id="sub-text"></span></div>
+  <div id="subtitles" class="hidden"><canvas id="sub-portrait" width="72" height="72"></canvas><div id="sub-body"><div id="sub-head"><span id="sub-speaker"></span><span id="sub-role"></span></div><span id="sub-text"></span></div></div>
   <div id="controls-help" class="hidden"><b>CONTROLS</b><br><kbd>W A S D</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump<br><kbd>F</kbd> steal / leave a car · <kbd>Space</kbd> handbrake<br><kbd>Mouse</kbd> look · <kbd>Click</kbd> punch / shoot · <kbd>1-4</kbd> weapons<br><kbd>R</kbd> radio · <kbd>M</kbd> map · <kbd>Esc</kbd> pause</div>
   <div id="pointer-prompt" class="hidden">Click to control the camera</div>
   <div id="crosshair" class="hidden"></div>

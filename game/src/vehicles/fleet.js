@@ -91,13 +91,13 @@ export function createFleet(world, effects) {
         lb.blue.visible = !on;
         lb.red.scale.setScalar(on ? 1.25 : 1);
         lb.blue.scale.setScalar(on ? 1 : 1.25);
-        lb.glowR.intensity = on ? 9 : 0;
-        lb.glowB.intensity = on ? 0 : 9;
+        lb.glowR.intensity = on ? 16 : 0;
+        lb.glowB.intensity = on ? 0 : 16;
         // Both glows stay lit, the live one bright: red and blue read together from afar.
         lb.spriteR.visible = true;
         lb.spriteB.visible = true;
-        lb.spriteR.material.opacity = on ? 1 : 0.45;
-        lb.spriteB.material.opacity = on ? 0.45 : 1;
+        lb.spriteR.material.opacity = on ? 1 : 0.6;
+        lb.spriteB.material.opacity = on ? 0.6 : 1;
       } else {
         lb.red.visible = true;
         lb.blue.visible = true;

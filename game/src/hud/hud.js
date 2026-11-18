@@ -6,15 +6,93 @@
 import { ECONOMY, WEAPONS } from '../config.js';
 import { speedKmh } from '../vehicles/physics.js';
 import { DISTRICTS } from '../city/layout.js';
+import { LOOKS } from '../characters.js';
 
 function el(id) {
   return document.getElementById(id);
 }
 
+/** Speaker name → the character look its portrait is painted from and the role under the name. */
+const SPEAKERS = {
+  'Sol': { look: 'sol', role: 'DRIVER' },
+  'Uncle Teo': { look: 'teo', role: 'BODY SHOP' },
+  'Dani': { look: 'dani', role: 'WHEELWOMAN' },
+  'Kane Okafor': { look: 'kane', role: 'TIDE RUNNERS' },
+  'Det. Ruiz': { look: 'ruiz', role: 'HBPD' },
+  'Rico': { look: 'gang', role: 'TIDE RUNNERS' },
+  'Dispatch': { look: 'officer', role: 'HBPD' },
+};
+const portraits = new Map();
+
+/** A 72x72 bust painted from the character's look (skin, hair, shirt, jacket, hat); cached per speaker. */
+function portraitFor(name, color) {
+  if (portraits.has(name)) return portraits.get(name);
+  const info = SPEAKERS[name] || { look: 'gang', role: '' };
+  const look = LOOKS[info.look] || LOOKS.gang;
+  const c = document.createElement('canvas');
+  c.width = 72;
+  c.height = 72;
+  const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, 72);
+  bg.addColorStop(0, color || '#ffb347');
+  bg.addColorStop(1, '#0b1424');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 72, 72);
+  // Shoulders and shirt, jacket lapels over them.
+  g.fillStyle = look.shirt;
+  g.beginPath();
+  g.moveTo(6, 72); g.quadraticCurveTo(10, 48, 36, 46); g.quadraticCurveTo(62, 48, 66, 72); g.closePath(); g.fill();
+  if (look.jacket) {
+    g.fillStyle = look.jacket;
+    g.beginPath(); g.moveTo(6, 72); g.quadraticCurveTo(10, 48, 28, 46); g.lineTo(24, 72); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(66, 72); g.quadraticCurveTo(62, 48, 44, 46); g.lineTo(48, 72); g.closePath(); g.fill();
+  }
+  // Neck and head.
+  g.fillStyle = look.skin;
+  g.fillRect(30, 40, 12, 10);
+  g.beginPath(); g.ellipse(36, 30, 13, 15, 0, 0, Math.PI * 2); g.fill();
+  // Hair by style: 0 short cap, 1 fuller with sideburns, 2 swept back; a hat covers it.
+  g.fillStyle = look.hair;
+  if (look.hat) {
+    g.fillStyle = look.hat;
+    g.fillRect(19, 14, 34, 7);
+    g.beginPath(); g.ellipse(36, 15, 14, 6, 0, Math.PI, 0); g.fill();
+  } else if (look.hairStyle === 1) {
+    g.beginPath(); g.ellipse(36, 20, 14, 9, 0, Math.PI, 0); g.fill();
+    g.fillRect(22, 20, 4, 14); g.fillRect(46, 20, 4, 14);
+  } else if (look.hairStyle === 2) {
+    g.beginPath(); g.ellipse(37, 19, 14, 8, -0.15, Math.PI, 0); g.fill();
+    g.fillRect(23, 19, 26, 4);
+  } else {
+    g.beginPath(); g.ellipse(36, 19, 13, 7, 0, Math.PI, 0); g.fill();
+  }
+  // Eyes, brows and mouth.
+  g.fillStyle = '#1a1208';
+  g.fillRect(29, 28, 4, 3); g.fillRect(39, 28, 4, 3);
+  g.fillRect(28, 25, 6, 1.5); g.fillRect(38, 25, 6, 1.5);
+  g.fillRect(32, 37, 8, 1.5);
+  if (look.badge) {
+    g.fillStyle = '#ffd43b';
+    g.beginPath(); g.arc(24, 58, 3.5, 0, Math.PI * 2); g.fill();
+  }
+  portraits.set(name, c);
+  return c;
+}
+
+/** Gear read from the road speed: reverse, then G1-G5 over the coupe's range. */
+function gearFor(v, kmh) {
+  if (v.speed < -1) return 'R';
+  if (kmh < 24) return 'G1';
+  if (kmh < 52) return 'G2';
+  if (kmh < 88) return 'G3';
+  if (kmh < 128) return 'G4';
+  return 'G5';
+}
+
 /** Hotbar slots 1-5: the four real weapons, the fifth stays empty. */
 const SLOT_IDS = ['fists', 'pistol', 'smg', 'shotgun', null];
 const CALLSIGNS = ['MARLIN', 'HERON', 'OSPREY', 'TARPON', 'PELICAN', 'KESTREL'];
-const POLICE_ROWS = 5;
+const POLICE_ROWS = 6;
 
 export function createHud(G) {
   const dom = {
@@ -28,8 +106,11 @@ export function createHud(G) {
     missionPanel: el('mission-panel'), missionChip: el('mission-chip'), missionTitle: el('mission-title'), stageSegs: el('stage-segs'),
     stageLabel: el('stage-label'), missionNext: el('mission-next-text'), policePanel: el('police-panel'), policeCount: el('police-count'),
     policeStatus: el('police-status'), policeRows: el('police-rows'), hotbar: el('hotbar'), repChip: el('rep-chip'), repName: el('rep-name'),
-    repNext: el('rep-next'), repFill: el('rep-fill'),
+    repNext: el('rep-next'), repFill: el('rep-fill'), condFill: el('cond-fill'), gear: el('gear'), radioSong: el('radio-song'),
+    radioArtist: el('radio-artist'), radioEq: el('radio-eq'), subPortrait: el('sub-portrait'), subRole: el('sub-role'),
   };
+  const eqBars = Array.from(dom.radioEq.children);
+  let portraitName = null;
   const starEls = [];
   for (let i = 0; i < 5; i += 1) {
     const s = document.createElement('span');
@@ -119,9 +200,10 @@ export function createHud(G) {
     let now = -1;
     let nextText = '';
     for (let i = 0; i < stages.length; i += 1) {
-      if (!stages[i].objective) continue;
+      const obj = stages[i].objective;
+      if (!obj) continue;
       if (i === cur.stage) now = total;
-      if (i > cur.stage && !nextText) nextText = stages[i].objective;
+      if (i > cur.stage && !nextText) nextText = typeof obj === 'function' ? obj(cur.ctx) : obj;
       total += 1;
     }
     if (now < 0) now = total;
@@ -140,7 +222,7 @@ export function createHud(G) {
     units.push({ cs: callsign(unit, kind), kind: label, d: Math.hypot(unit.x - px, unit.z - pz), text: stateText, cls });
   }
 
-  /** The HBPD panel: live count, sight status and the five nearest units with their state. */
+  /** The HBPD panel: live count, sight status and the six nearest units with their state. */
   function updatePolicePanel() {
     const p = G.player;
     const P = G.police;
@@ -348,14 +430,27 @@ export function createHud(G) {
       const v = p.vehicle;
       if (p.state === 'car' && v) {
         dom.speed.classList.remove('hidden');
-        dom.speedValue.textContent = String(Math.round(speedKmh(v)));
+        const kmh = Math.round(speedKmh(v));
+        dom.speedValue.textContent = String(kmh);
+        dom.gear.textContent = gearFor(v, kmh);
         const fire = v.onFire ? `  ⚠ ON FIRE ${Math.max(0, Math.ceil(v.fuse))} s` : v.hp < 38 ? '  ⚠ DAMAGED' : '';
         dom.vehicleName.textContent = v.spec.name + fire;
         dom.vehicleName.classList.toggle('warn', v.hp < 38 || v.onFire);
         dom.vehicleName.classList.toggle('fire', !!v.onFire);
+        const hp = Math.max(0, Math.min(100, v.hp));
+        dom.condFill.style.width = `${hp}%`;
+        dom.condFill.className = hp < 38 ? 'low' : hp < 70 ? 'mid' : '';
         dom.radio.classList.remove('hidden');
         dom.radioName.textContent = G.radio.stationName();
+        dom.radioSong.textContent = G.radio.trackTitle();
+        dom.radioArtist.textContent = G.radio.trackArtist();
         dom.radio.classList.toggle('off', !G.radio.playing);
+        // Equalizer bars bounce on the world clock, so a still frame reads as music too.
+        const tm = G.world.time;
+        for (let i = 0; i < eqBars.length; i += 1) {
+          const h = 0.3 + 0.7 * Math.abs(Math.sin(tm * (5 + i * 1.3) + i * 1.7));
+          eqBars[i].style.height = `${Math.round(h * 100)}%`;
+        }
       } else {
         dom.speed.classList.add('hidden');
         dom.radio.classList.add('hidden');
@@ -379,6 +474,16 @@ export function createHud(G) {
         dom.subSpeaker.textContent = line.name;
         dom.subSpeaker.style.color = line.color;
         dom.subText.textContent = line.text;
+        const info = SPEAKERS[line.name];
+        dom.subRole.textContent = info ? info.role : '';
+        dom.subRole.classList.toggle('hidden', !(info && info.role));
+        dom.subtitles.style.borderLeftColor = line.color;
+        if (portraitName !== line.name) {
+          portraitName = line.name;
+          const ctx2d = dom.subPortrait.getContext('2d');
+          ctx2d.clearRect(0, 0, 72, 72);
+          ctx2d.drawImage(portraitFor(line.name, line.color), 0, 0);
+        }
         state.subTimer += dt;
         if (state.subTimer >= line.seconds) {
           state.subs.shift();

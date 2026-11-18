@@ -4,15 +4,16 @@
 // stations; the music plays while Sol is in a car.
 import { RADIO_STATIONS } from './config.js';
 
+/** Original song titles per station (same index as ARTISTS), shown on the HUD radio card. */
 const TRACKS = [
-  ['Chrome Coast', 'Neon Ballast', 'Sodium Nights', 'Mirror Drive', 'Palmetto Pulse'],
-  ['Low Tide Loop', 'Sea Glass', 'Slow Boardwalk', 'Pelican Hour'],
-  ['The Dock Talk Hour', 'Harbour Report', 'Saltmarsh Call-In'],
+  ['Chrome Coast', 'Neon Ballast', 'Sodium Nights', 'Mirror Drive', 'Palmetto Pulse', 'Causeway Lights'],
+  ['Low Tide Loop', 'Sea Glass', 'Slow Boardwalk', 'Pelican Hour', 'Salt Air Lullaby'],
+  ['The Dock Talk Hour', 'Harbour Report', 'Saltmarsh Call-In', 'Tide Tables', 'Night Shift Dispatch'],
 ];
 const ARTISTS = [
-  ['Marina Volt', 'Glass Tower Kids', 'Okafor Sound', 'Sol & the Strands', 'Causeway'],
-  ['Coral Choir', 'Dusk Pilots', 'Tide Runners (Instrumental)', 'Sandbar'],
-  ['with Benny Alder', 'with Lu Marsh', 'with Benny Alder'],
+  ['Marina Volt', 'Glass Tower Kids', 'Okafor Sound', 'Sol & the Strands', 'Causeway', 'Vega Drive-In'],
+  ['Coral Choir', 'Dusk Pilots', 'Tide Runners (Instrumental)', 'Sandbar', 'The Pier Lamps'],
+  ['with Benny Alder', 'with Lu Marsh', 'with Benny Alder', 'with Lu Marsh', 'with Officer Dale Prewitt'],
 ];
 
 const CHORDS = {
@@ -166,7 +167,9 @@ export function createRadio(audio) {
   ];
 
   r.stationName = () => RADIO_STATIONS[r.station];
-  r.trackName = () => `${TRACKS[r.station][r.track % TRACKS[r.station].length]} · ${ARTISTS[r.station][r.track % ARTISTS[r.station].length]}`;
+  r.trackTitle = () => TRACKS[r.station][r.track % TRACKS[r.station].length];
+  r.trackArtist = () => ARTISTS[r.station][r.track % ARTISTS[r.station].length];
+  r.trackName = () => `${r.trackTitle()} · ${r.trackArtist()}`;
   r.setStation = (i, quiet = false) => {
     r.station = ((i % STATIONS.length) + STATIONS.length) % STATIONS.length;
     r.stepIndex = 0;

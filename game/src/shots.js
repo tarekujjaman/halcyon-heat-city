@@ -94,9 +94,11 @@ export async function stageShot(name, G) {
     drive(G, 0.45, [KEYS.forward, KEYS.handbrake, KEYS.right]);
     drive(G, 0.15, [KEYS.forward, KEYS.right]);
     const v = G.player.vehicle;
-    // Two cruisers right on its tail, one in each lane, angled in toward it, lightbars on.
+    v.hp = 61;
+    // Two cruisers right on its tail, one in each lane, angled in toward it, lightbars on; a third
+    // further back in pursuit and a roadblock forming ahead, so the HBPD panel lists five units.
     const cruisers = [];
-    for (const [dx, dz, turn] of [[9, -4.5, 0.2], [14.5, -0.5, -0.12]]) {
+    for (const [dx, dz, turn] of [[9, -4.5, 0.2], [14.5, -0.5, -0.12], [27, 3.2, 0.05]]) {
       const c = G.police.spawnCruiser({ x: v.x + dx, z: v.z + dz, yaw: -Math.PI / 2 + turn });
       c.vx = -19;
       c.siren = true;
@@ -119,7 +121,21 @@ export async function stageShot(name, G) {
     G.camera.camera.fov = cam[6];
     G.camera.camera.updateProjectionMatrix();
     placeCamera(G, camPos, look);
+    // A roadblock entry for the panel, forming just past the next corner, out of frame.
+    const block = { x: v.x - 23, z: v.z, cruisers: [], officers: [] };
+    G.police.roadblocks.push(block);
+    // Mission state for the panel: Saltmarsh Standoff at its "lose the police" stage, on the clock.
+    const docks = G.missions.defs.find((d) => d.id === 'docks');
+    const stage = docks.stages.findIndex((s) => s.objective === 'Lose the police');
+    G.missions.current = { def: docks, ctx: { G, def: docks, data: {} }, stage, time: 0 };
+    G.hud.setTimer(87);
+    // Warm sunset haze and a hotter grade for the cover.
+    G.world.scene.fog.near = 70;
+    G.world.scene.fog.far = 520;
+    G.renderer.toneMappingExposure = 1.12;
     finish();
+    G.hud.say('Dani', "Teo's garage, two blocks. Don't lift now, Sol, they're right on you!", 8, '#ffd43b');
+    G.hud.update(0.016);
     return;
   }
 

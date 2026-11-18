@@ -161,9 +161,12 @@ function geometriesFor(type) {
     body.box(-hw + 0.08, base + lowerH, cabinFront + 0.5, W - 0.16, 0.06, L / 2 - cabinFront - 0.5, white);
     // Spoiler for the coupe.
     if (type === 'coupe') {
-      trim.box(-hw + 0.2, base + lowerH + 0.15, -L / 2 + 0.05, W - 0.4, 0.06, 0.3, dark);
-      trim.box(-hw + 0.3, base + lowerH, -L / 2 + 0.1, 0.08, 0.15, 0.2, dark);
-      trim.box(hw - 0.38, base + lowerH, -L / 2 + 0.1, 0.08, 0.15, 0.2, dark);
+      // A raised rear wing on two uprights, with upturned end plates.
+      trim.box(-hw + 0.12, base + lowerH + 0.3, -L / 2 + 0.02, W - 0.24, 0.07, 0.42, dark);
+      trim.box(-hw + 0.34, base + lowerH, -L / 2 + 0.14, 0.1, 0.3, 0.22, dark);
+      trim.box(hw - 0.44, base + lowerH, -L / 2 + 0.14, 0.1, 0.3, 0.22, dark);
+      trim.box(-hw + 0.12, base + lowerH + 0.3, -L / 2 + 0.02, 0.05, 0.2, 0.42, dark);
+      trim.box(hw - 0.17, base + lowerH + 0.3, -L / 2 + 0.02, 0.05, 0.2, 0.42, dark);
     }
   }
   // Bumpers, grille, mirrors and sills.
@@ -288,10 +291,10 @@ export function createVehicleModel(type, color) {
     const glowTex = ensureTextures().glow;
     const spriteR = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#ff2a2a', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     spriteR.position.set(-0.38, barY + 0.1, -0.55);
-    spriteR.scale.set(2.8, 2.0, 1);
+    spriteR.scale.set(3.8, 2.7, 1);
     const spriteB = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#2a6aff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     spriteB.position.set(0.38, barY + 0.1, -0.55);
-    spriteB.scale.set(2.8, 2.0, 1);
+    spriteB.scale.set(3.8, 2.7, 1);
     bodyGroup.add(spriteR, spriteB);
     lightbar = { red, blue, glowR, glowB, spriteR, spriteB, phase: 0 };
   }
