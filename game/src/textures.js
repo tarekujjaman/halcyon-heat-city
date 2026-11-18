@@ -1,9 +1,6 @@
-// Every surface texture the game uses is painted on a canvas at start-up, so the game ships no
-// image files: windows by building style (with a lit-window emissive map for the night), the
-// road with its lane markings, asphalt, pavement, sand, grass, boardwalk planks, concrete,
-// corrugated steel, shipping containers and the soft sprite for smoke and glows. Exports one
-// painter per surface and createTextureSet(), the shared set the city builders draw from.
-// Sign text is painted by city/signs.js into its atlas.
+// Every texture the game uses is painted here on a canvas at start-up: windows by building style
+// (with a matching lit-window emissive map for the night), road surfaces with lane markings,
+// pavement, sand, grass, boardwalk planks, corrugated steel, neon and shop signs. No image files.
 import * as THREE from 'three';
 import { createRng } from './rng.js';
 
@@ -14,7 +11,6 @@ function canvas(w, h) {
   return c;
 }
 
-/** Wrap a painted canvas as a three.js texture: repeating and sRGB by default. */
 function toTexture(c, { repeat = true, srgb = true, anisotropy = 4 } = {}) {
   const t = new THREE.CanvasTexture(c);
   if (repeat) {
@@ -27,7 +23,6 @@ function toTexture(c, { repeat = true, srgb = true, anisotropy = 4 } = {}) {
   return t;
 }
 
-/** Seeded per-pixel grain over the whole canvas; `dark` keeps the blue channel in step (else a warm tint). */
 function noise(ctx, w, h, rng, alpha, dark = true) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
@@ -41,11 +36,10 @@ function noise(ctx, w, h, rng, alpha, dark = true) {
 }
 
 /**
- * A wall tile with a grid of windows: {map, emissive}. One tile is `cols` windows wide and `rows`
- * floors tall; `winW`/`winH` are the window's share of its cell; `sill`, `balcony` and `mullions`
- * add trim. The emissive map lights a seeded `litChance` share of the windows for the night.
+ * A wall tile with a grid of windows. One tile is `cols` windows wide and `rows` floors tall; the
+ * emissive map lights a seeded share of them for the night.
  */
-export function windowTexture({ cols = 2, rows = 1, wall = '#d9d6cf', frame = '#3b3f46', glass = '#5d7f9c', glassTop = '#9fc3dc', litChance = 0.45, seed = 7, winW = 0.55, winH = 0.6, sill = false, balcony = false, mullions = false } = {}) {
+export function windowTexture({ cols = 2, rows = 1, wall = '#d9d6cf', frame = '#3b3f46', glass = '#5d7f9c', glassTop = '#9fc3dc', litChance = 0.45, seed = 7, winW = 0.55, winH = 0.6, sill = false, balcony = false, mullions = false }) {
   const size = 256;
   const rng = createRng(seed);
   const day = canvas(size, size);
@@ -103,7 +97,6 @@ export function windowTexture({ cols = 2, rows = 1, wall = '#d9d6cf', frame = '#
   return { map: toTexture(day), emissive: toTexture(night) };
 }
 
-/** Corrugated steel for warehouse walls: vertical ribs over `color`; {map, emissive: null} like a window set. */
 export function corrugatedTexture(color = '#8d8f93', seed = 3) {
   const size = 256;
   const c = canvas(size, size);
@@ -120,7 +113,6 @@ export function corrugatedTexture(color = '#8d8f93', seed = 3) {
   return { map: toTexture(c), emissive: null };
 }
 
-/** One road width kerb to kerb (u) by one lane-marking repeat (v): edge lines, a double centre line and dashes. */
 export function roadTexture() {
   const w = 512;
   const h = 512;
@@ -143,7 +135,6 @@ export function roadTexture() {
   return toTexture(c);
 }
 
-/** Plain asphalt for intersection boxes and the key's turning circle. */
 export function asphaltTexture() {
   const size = 256;
   const c = canvas(size, size);
@@ -154,7 +145,6 @@ export function asphaltTexture() {
   return toTexture(c);
 }
 
-/** Pavement slabs: a grid of joints over a grainy stone grey. */
 export function pavementTexture() {
   const size = 256;
   const c = canvas(size, size);
@@ -175,7 +165,6 @@ export function pavementTexture() {
   return toTexture(c);
 }
 
-/** Beach sand with a warm grain. */
 export function sandTexture() {
   const size = 256;
   const c = canvas(size, size);
@@ -186,7 +175,6 @@ export function sandTexture() {
   return toTexture(c);
 }
 
-/** Lawn grass for Palmetto Heights, the parks and the verges. */
 export function grassTexture() {
   const size = 256;
   const c = canvas(size, size);
@@ -197,7 +185,6 @@ export function grassTexture() {
   return toTexture(c);
 }
 
-/** Boardwalk and pier planks: eight boards of varied shade with a dark seam between them. */
 export function woodTexture() {
   const size = 256;
   const c = canvas(size, size);
@@ -214,7 +201,6 @@ export function woodTexture() {
   return toTexture(c);
 }
 
-/** Grainy concrete for lots, the quay, the causeway and Pelican Key. */
 export function concreteTexture(color = '#9b9a95') {
   const size = 256;
   const c = canvas(size, size);
@@ -225,7 +211,46 @@ export function concreteTexture(color = '#9b9a95') {
   return toTexture(c);
 }
 
-/** Shipping-container steel: wide corrugations over `color` (white, so the vertex colour paints each box). */
+/** A sign plane texture: text on a background, used for shops, hotels and billboards. */
+export function signTexture(text, { bg = '#1b1b24', fg = '#ffffff', w = 512, h = 128, font = 'bold 72px Impact, "Arial Black", Arial, sans-serif', border = null } = {}) {
+  const c = canvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+  if (border) {
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 8;
+    ctx.strokeRect(6, 6, w - 12, h - 12);
+  }
+  ctx.fillStyle = fg;
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, h / 2 + 4, w - 40);
+  return toTexture(c, { repeat: false });
+}
+
+/** A neon tube sign: glowing letters on near-black, the same canvas serving as the emissive map. */
+export function neonTexture(text, color = '#ff4fd8', { w = 512, h = 128 } = {}) {
+  const c = canvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0b0a12';
+  ctx.fillRect(0, 0, w, h);
+  ctx.font = 'bold 84px "Arial Black", Impact, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 28;
+  ctx.fillStyle = color;
+  for (let i = 0; i < 3; i += 1) ctx.fillText(text, w / 2, h / 2 + 4, w - 40);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 80px "Arial Black", Impact, Arial, sans-serif';
+  ctx.globalAlpha = 0.85;
+  ctx.fillText(text, w / 2, h / 2 + 4, w - 44);
+  return toTexture(c, { repeat: false });
+}
+
 export function containerTexture(color, seed = 5) {
   const size = 256;
   const c = canvas(size, size);
@@ -242,7 +267,7 @@ export function containerTexture(color, seed = 5) {
   return toTexture(c);
 }
 
-/** A soft round sprite (solid to 40% of the radius, then fading to `outer`) for smoke, glows and the sun. */
+/** A soft round sprite for smoke, glows and the sun. */
 export function glowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)') {
   const size = 128;
   const c = canvas(size, size);
@@ -256,11 +281,7 @@ export function glowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255
   return toTexture(c, { repeat: false });
 }
 
-/**
- * Every texture, painted once at start-up and shared by the city builders, the vehicles and the
- * effects: the six window styles ({map, emissive}), the two steels, the ground surfaces and the
- * two particle sprites. Seeds are fixed so the city looks the same on every load.
- */
+/** Everything built once and shared. */
 export function createTextureSet() {
   return {
     facade: windowTexture({ cols: 2, rows: 1, wall: '#d9d6cf', seed: 21, sill: true }),

@@ -1,23 +1,9 @@
-// Static collision for Halcyon Bay: every building, wall, post, railing and sea line of the city
-// lives in this spatial hash, which pushes circles (people, the circles a car's body is made of)
-// out of them, answers overlap queries for spawning, and raycasts in 3D for bullets, police sight
-// lines and the camera. Exports StaticColliders and the circle-against-circle test circleOverlap.
+// Static collision: the buildings, walls, posts and water lines of the city in a spatial hash, with the
+// circle push-out that keeps people and cars out of walls and the 3D raycast that stops bullets and
+// pulls the camera in front of a building. Boxes are axis-aligned with a height; circles are posts.
 
-/** Hash cell size in metres: a block is 56 m, so a body query touches one to four cells. */
 const CELL = 24;
-/** Cell coordinates pack into one integer key, so a lookup allocates no string in the hot loops. */
-const KEY_OFFSET = 32768;
-const cellKey = (cx, cz) => (cx + KEY_OFFSET) * 65536 + (cz + KEY_OFFSET);
 
-/** Bumped once per query: a collider spanning several cells is reported once without a Set. */
-let queryStamp = 0;
-const scratch = [];
-
-/**
- * Axis-aligned boxes with a height and vertical cylinders (posts) in a grid of cells. A collider
- * is {kind, h, tag, data, ...} where `tag` names what it is ('wall', 'sea', 'railing', ...), so
- * the police can see over railings and the camera knows what it hit.
- */
 export class StaticColliders {
   constructor() {
     this.boxes = [];
@@ -25,9 +11,8 @@ export class StaticColliders {
     this.cells = new Map();
   }
 
-  /** The integer key of cell (cx, cz). */
   key(cx, cz) {
-    return cellKey(cx, cz);
+    return `${cx},${cz}`;
   }
 
   insert(item, minX, minZ, maxX, maxZ) {
@@ -37,7 +22,7 @@ export class StaticColliders {
     const cz2 = Math.floor(maxZ / CELL);
     for (let cx = cx1; cx <= cx2; cx += 1) {
       for (let cz = cz1; cz <= cz2; cz += 1) {
-        const k = cellKey(cx, cz);
+        const k = this.key(cx, cz);
         let list = this.cells.get(k);
         if (!list) {
           list = [];
@@ -48,52 +33,41 @@ export class StaticColliders {
     }
   }
 
-  /**
-   * An axis-aligned box from (x1, z1) to (x2, z2) in any corner order, floor to height h.
-   * `tag` names what it is and `data` rides along for the caller. Returns the collider.
-   */
+  /** An axis-aligned box from (x1, z1) to (x2, z2), floor to height h; `tag` names what it is. */
   addBox(x1, z1, x2, z2, h = 10, tag = 'wall', data = null) {
-    const box = { kind: 'box', x1: Math.min(x1, x2), z1: Math.min(z1, z2), x2: Math.max(x1, x2), z2: Math.max(z1, z2), h, tag, data, stamp: 0 };
+    const box = { kind: 'box', x1: Math.min(x1, x2), z1: Math.min(z1, z2), x2: Math.max(x1, x2), z2: Math.max(z1, z2), h, tag, data };
     this.boxes.push(box);
     this.insert(box, box.x1, box.z1, box.x2, box.z2);
     return box;
   }
 
-  /** A vertical post of radius r at (x, z), floor to height h. Returns the collider. */
   addCircle(x, z, r, h = 6, tag = 'post', data = null) {
-    const circle = { kind: 'circle', x, z, r, h, tag, data, stamp: 0 };
+    const circle = { kind: 'circle', x, z, r, h, tag, data };
     this.circles.push(circle);
     this.insert(circle, x - r, z - r, x + r, z + r);
     return circle;
   }
 
-  /** Every collider whose cell overlaps the circle (x, z, r), each once, into `out` (reused). */
+  /** Every collider whose cell overlaps the circle (x, z, r). */
   query(x, z, r, out = []) {
     out.length = 0;
-    queryStamp += 1;
     const cx1 = Math.floor((x - r) / CELL);
     const cz1 = Math.floor((z - r) / CELL);
     const cx2 = Math.floor((x + r) / CELL);
     const cz2 = Math.floor((z + r) / CELL);
     for (let cx = cx1; cx <= cx2; cx += 1) {
       for (let cz = cz1; cz <= cz2; cz += 1) {
-        const list = this.cells.get(cellKey(cx, cz));
+        const list = this.cells.get(this.key(cx, cz));
         if (!list) continue;
-        for (const item of list) {
-          if (item.stamp === queryStamp) continue;
-          item.stamp = queryStamp;
-          out.push(item);
-        }
+        for (const item of list) if (!out.includes(item)) out.push(item);
       }
     }
     return out;
   }
 
   /**
-   * Push a circle `body` {x, z} of radius r out of everything it overlaps (two passes, so a corner
-   * settles). Returns the hits {nx, nz, collider} with unit normals pointing away from the
-   * obstacle, so callers can kill the velocity into the wall. `y` is the body's height above the
-   * ground: a jumping body clears any collider lower than that.
+   * Push a circle out of everything it overlaps. Returns the hit normals (unit vectors pointing away
+   * from the obstacle) so callers can kill velocity into the wall. `y` lets a jumping body clear low walls.
    */
   resolveCircle(body, r, y = 0, out = []) {
     out.length = 0;
@@ -144,7 +118,7 @@ export class StaticColliders {
     return out;
   }
 
-  /** The first collider the circle (x, z, r) overlaps at height y (no push), or null. */
+  /** Does the circle overlap anything (no push)? */
   overlaps(x, z, r, y = 0) {
     const candidates = this.query(x, z, r, scratch);
     for (const c of candidates) {
@@ -159,9 +133,8 @@ export class StaticColliders {
   }
 
   /**
-   * A 3D ray from (ox, oy, oz) along the unit direction (dx, dy, dz) up to maxDist: the nearest
-   * box or post it hits as {t, x, y, z, collider}, or null. Tests only the colliders in the cells
-   * under the ray's 2D bounding rectangle, so a shot across the whole city stays cheap.
+   * A 3D ray from (ox, oy, oz) along (dx, dy, dz) up to maxDist: the nearest box or post hit, or null.
+   * Walks the cells the ray's 2D footprint crosses, so it is cheap even across the whole city.
    */
   raycast(ox, oy, oz, dx, dy, dz, maxDist) {
     let best = null;
@@ -171,14 +144,14 @@ export class StaticColliders {
     const cz1 = Math.floor(Math.min(oz, ez) / CELL);
     const cx2 = Math.floor(Math.max(ox, ex) / CELL);
     const cz2 = Math.floor(Math.max(oz, ez) / CELL);
-    queryStamp += 1;
+    const tested = new Set();
     for (let cx = cx1; cx <= cx2; cx += 1) {
       for (let cz = cz1; cz <= cz2; cz += 1) {
-        const list = this.cells.get(cellKey(cx, cz));
+        const list = this.cells.get(this.key(cx, cz));
         if (!list) continue;
         for (const c of list) {
-          if (c.stamp === queryStamp) continue;
-          c.stamp = queryStamp;
+          if (tested.has(c)) continue;
+          tested.add(c);
           const t = c.kind === 'box' ? rayBox(ox, oy, oz, dx, dy, dz, c) : rayCylinder(ox, oy, oz, dx, dy, dz, c);
           if (t !== null && t >= 0 && t <= maxDist && (best === null || t < best.t)) best = { t, collider: c };
         }
@@ -193,30 +166,27 @@ export class StaticColliders {
   }
 }
 
-// The slab test keeps its running interval in module state so it allocates nothing per axis.
-let slabMin = 0;
-let slabMax = Infinity;
+const scratch = [];
 
-/** Narrow [slabMin, slabMax] to the ray's overlap with lo..hi on one axis; false when empty. */
-function slab(o, d, lo, hi) {
-  if (Math.abs(d) < 1e-9) return o >= lo && o <= hi;
-  let t1 = (lo - o) / d;
-  let t2 = (hi - o) / d;
-  if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
-  if (t1 > slabMin) slabMin = t1;
-  if (t2 < slabMax) slabMax = t2;
-  return slabMin <= slabMax;
-}
-
-/** Ray against a box standing on the ground: the entry distance (0 when the origin is inside), or null. */
 function rayBox(ox, oy, oz, dx, dy, dz, b) {
-  slabMin = 0;
-  slabMax = Infinity;
-  if (!slab(ox, dx, b.x1, b.x2) || !slab(oy, dy, 0, b.h) || !slab(oz, dz, b.z1, b.z2)) return null;
-  return slabMin;
+  let tmin = 0;
+  let tmax = Infinity;
+  const axes = [[ox, dx, b.x1, b.x2], [oy, dy, 0, b.h], [oz, dz, b.z1, b.z2]];
+  for (const [o, d, lo, hi] of axes) {
+    if (Math.abs(d) < 1e-9) {
+      if (o < lo || o > hi) return null;
+    } else {
+      let t1 = (lo - o) / d;
+      let t2 = (hi - o) / d;
+      if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+      tmin = Math.max(tmin, t1);
+      tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return null;
+    }
+  }
+  return tmin;
 }
 
-/** Ray against a post: the distance to its side between the ground and its top, or null. */
 function rayCylinder(ox, oy, oz, dx, dy, dz, c) {
   const fx = ox - c.x;
   const fz = oz - c.z;
@@ -233,10 +203,7 @@ function rayCylinder(ox, oy, oz, dx, dy, dz, c) {
   return t;
 }
 
-/**
- * Circle a against circle b: {depth, nx, nz} with the overlap depth and the unit normal from b
- * to a, or null when they do not touch. Used for people against cars and cars against cars.
- */
+/** Circle against circle: the overlap depth and the unit normal from b to a, or null. */
 export function circleOverlap(ax, az, ar, bx, bz, br) {
   const dx = ax - bx;
   const dz = az - bz;

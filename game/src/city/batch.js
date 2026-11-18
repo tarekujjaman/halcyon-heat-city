@@ -1,15 +1,9 @@
-// A merged-geometry batch for the city builders: thousands of quads, boxes, cylinders and discs
-// pushed into one BufferGeometry so a whole district draws in a single call. Vertex colours carry
-// each piece's tint and the UVs its texture repeat. Exports the MeshBatch class.
+// A merged-geometry batch: thousands of boxes, quads and cylinders pushed into one BufferGeometry so
+// a whole district draws in one call. Vertex colours carry each piece's tint, UVs its texture repeat.
 import * as THREE from 'three';
 
 const tmpColor = new THREE.Color();
-const TAU = Math.PI * 2;
-const DEFAULT_UV = [[0, 0], [1, 0], [1, 1], [0, 1]];
-/** Two triangles per quad, corners a b c d counter-clockwise. */
-const QUAD_ORDER = [0, 1, 2, 0, 2, 3];
 
-/** Flat arrays of vertex data that `build()` turns into one mesh. `count` is the vertex count so far. */
 export class MeshBatch {
   constructor() {
     this.positions = [];
@@ -19,19 +13,17 @@ export class MeshBatch {
     this.count = 0;
   }
 
-  /**
-   * A quad from four corners [x, y, z] in order (counter-clockwise seen from the normal side),
-   * one normal `n` for all four, optional UVs per corner (default 0..1) and a CSS colour.
-   */
+  /** A quad from four corners in order (counter-clockwise seen from the normal side). */
   quad(a, b, c, d, n, uv, color) {
     tmpColor.set(color);
     const r = tmpColor.r;
     const g = tmpColor.g;
     const bl = tmpColor.b;
-    const uvc = uv || DEFAULT_UV;
-    for (let i = 0; i < 6; i += 1) {
-      const k = QUAD_ORDER[i];
-      const p = k === 0 ? a : k === 1 ? b : k === 2 ? c : d;
+    const corners = [a, b, c, d];
+    const uvc = uv || [[0, 0], [1, 0], [1, 1], [0, 1]];
+    const order = [0, 1, 2, 0, 2, 3];
+    for (const k of order) {
+      const p = corners[k];
       this.positions.push(p[0], p[1], p[2]);
       this.normals.push(n[0], n[1], n[2]);
       this.uvs.push(uvc[k][0], uvc[k][1]);
@@ -55,19 +47,16 @@ export class MeshBatch {
     this.quad([x, y, z], [x, y, z2], [x, y2, z2], [x, y2, z], [-1, 0, 0], uvs(ud), color);
   }
 
-  /** The top face of a box at height y, w by d from (x, z), facing up. */
   boxTop(x, y, z, w, d, color, tile = [1, 1]) {
     const uw = w / tile[0];
     const vd = d / tile[1];
     this.quad([x, y, z + d], [x + w, y, z + d], [x + w, y, z], [x, y, z], [0, 1, 0], [[0, 0], [uw, 0], [uw, vd], [0, vd]], color);
   }
 
-  /** The underside of a box at height y, facing down (awnings, bridge decks seen from below). */
   boxBottom(x, y, z, w, d, color) {
     this.quad([x, y, z], [x + w, y, z], [x + w, y, z + d], [x, y, z + d], [0, -1, 0], null, color);
   }
 
-  /** An axis-aligned box with its four sides and top (no bottom: it stands on something). */
   box(x, y, z, w, h, d, color, tile = [1, 1]) {
     this.boxSides(x, y, z, w, h, d, color, tile);
     this.boxTop(x, y + h, z, w, d, color, tile);
@@ -89,53 +78,50 @@ export class MeshBatch {
     this.quad(P(-hw, h, hd), P(hw, h, hd), P(hw, h, -hd), P(-hw, h, -hd), [0, 1, 0], uv(w / tile[0], d / tile[1]), color);
   }
 
-  /**
-   * A vertical cylinder (a cone when rTop differs, a spire when it is 0) of `segments` sides
-   * standing on y, capped on top when rTop > 0. The sides are textured around the base circumference.
-   */
+  /** A vertical cylinder (or cone when rTop differs) of `segments` sides. */
   cylinder(cx, y, cz, rBottom, rTop, h, segments, color, tile = [1, 1]) {
-    const v = h / tile[1];
-    const circumference = TAU * rBottom;
     for (let i = 0; i < segments; i += 1) {
-      const a0 = (i / segments) * TAU;
-      const a1 = ((i + 1) / segments) * TAU;
+      const a0 = (i / segments) * Math.PI * 2;
+      const a1 = ((i + 1) / segments) * Math.PI * 2;
       const c0 = Math.cos(a0);
       const s0 = Math.sin(a0);
       const c1 = Math.cos(a1);
       const s1 = Math.sin(a1);
       const n = [Math.cos((a0 + a1) / 2), 0, Math.sin((a0 + a1) / 2)];
-      const u0 = (i / segments) * circumference / tile[0];
-      const u1 = ((i + 1) / segments) * circumference / tile[0];
+      const u0 = (i / segments) * (Math.PI * 2 * rBottom) / tile[0];
+      const u1 = ((i + 1) / segments) * (Math.PI * 2 * rBottom) / tile[0];
+      const v = h / tile[1];
       this.quad(
         [cx + c1 * rBottom, y, cz + s1 * rBottom], [cx + c0 * rBottom, y, cz + s0 * rBottom],
         [cx + c0 * rTop, y + h, cz + s0 * rTop], [cx + c1 * rTop, y + h, cz + s1 * rTop],
         n, [[u1, 0], [u0, 0], [u0, v], [u1, v]], color,
       );
     }
-    if (rTop > 0) this.disc(cx, y + h, cz, rTop, segments, color);
+    if (rTop > 0) {
+      for (let i = 0; i < segments; i += 1) {
+        const a0 = (i / segments) * Math.PI * 2;
+        const a1 = ((i + 1) / segments) * Math.PI * 2;
+        this.triangle([cx, y + h, cz], [cx + Math.cos(a1) * rTop, y + h, cz + Math.sin(a1) * rTop], [cx + Math.cos(a0) * rTop, y + h, cz + Math.sin(a0) * rTop], [0, 1, 0], color);
+      }
+    }
   }
 
-  /** A flat disc of radius r facing up at height y. */
+  /** A flat disc facing up. */
   disc(cx, y, cz, r, segments, color) {
     for (let i = 0; i < segments; i += 1) {
-      const a0 = (i / segments) * TAU;
-      const a1 = ((i + 1) / segments) * TAU;
+      const a0 = (i / segments) * Math.PI * 2;
+      const a1 = ((i + 1) / segments) * Math.PI * 2;
       this.triangle([cx, y, cz], [cx + Math.cos(a1) * r, y, cz + Math.sin(a1) * r], [cx + Math.cos(a0) * r, y, cz + Math.sin(a0) * r], [0, 1, 0], color);
     }
   }
 
-  /** One triangle a b c with normal n and a flat colour (UV 0, 0). */
   triangle(a, b, c, n, color) {
     tmpColor.set(color);
-    const r = tmpColor.r;
-    const g = tmpColor.g;
-    const bl = tmpColor.b;
-    for (let i = 0; i < 3; i += 1) {
-      const p = i === 0 ? a : i === 1 ? b : c;
+    for (const p of [a, b, c]) {
       this.positions.push(p[0], p[1], p[2]);
       this.normals.push(n[0], n[1], n[2]);
       this.uvs.push(0, 0);
-      this.colors.push(r, g, bl);
+      this.colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
     }
     this.count += 3;
   }
@@ -155,12 +141,10 @@ export class MeshBatch {
     this.quad(P(-hw, hd), P(hw, hd), P(hw, -hd), P(-hw, -hd), [0, 1, 0], null, color);
   }
 
-  /** True when nothing has been added: callers skip the mesh rather than draw an empty one. */
   isEmpty() {
     return this.count === 0;
   }
 
-  /** One static mesh of everything pushed so far, with its bounding sphere, under `material`. */
   build(material, { castShadow = true, receiveShadow = true } = {}) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));

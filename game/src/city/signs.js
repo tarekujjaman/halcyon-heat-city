@@ -1,17 +1,12 @@
-// The sign atlas of Halcyon Bay: every shop, hotel, bar and billboard text is painted once into
-// one big canvas (plus a glowing twin the night uses as an emissive map), so all the signs of
-// the city draw in one call. Exports SignAtlas (allocate a sign, textures), addSignQuad for
-// hanging a sign on a building wall, and PANEL_UV for plain panels that share the sign material.
+// A sign atlas: every shop, hotel, bar and billboard text of the city is painted once into one big
+// canvas (and a glowing twin for the night), so all the signs of Halcyon Bay draw in one call.
 import * as THREE from 'three';
 
 const CELL_W = 512;
 const CELL_H = 128;
 const COLS = 8;
 const ROWS = 16;
-/** Once the atlas is full, every further sign gets this near-empty corner rather than overflowing. */
-const FULL_RECT = { u0: 0, v0: 0, u1: 0.001, v1: 0.001 };
 
-/** Allocates sign cells in two 4096 by 2048 canvases: lit colours for the day and the glow for the night. */
 export class SignAtlas {
   constructor() {
     this.color = document.createElement('canvas');
@@ -33,18 +28,14 @@ export class SignAtlas {
   }
 
   /**
-   * The UV rectangle of a sign, painted on first request and cached by text and colours. `neon`
-   * gives the tube colour (glowing text on black), else `bg`/`fg` paint a lit shop sign. Returns
-   * {u0, v0, u1, v1} with v measured from the bottom as three.js does. Holds COLS * ROWS signs.
+   * The UV rectangle of a sign; `neon` gives the tube colour (glowing text on black), else `bg`/`fg`
+   * paint a lit shop sign. Returns {u0, v0, u1, v1} with v measured from the bottom as three.js does.
    */
   allocate(text, { neon = null, bg = '#f4efe6', fg = '#1b1b24', font = 'bold 88px Impact, "Arial Black", Arial, sans-serif' } = {}) {
     const key = `${text}|${neon}|${bg}|${fg}`;
     if (this.cache.has(key)) return this.cache.get(key);
     const slot = this.next;
-    if (slot >= COLS * ROWS) {
-      this.cache.set(key, FULL_RECT);
-      return FULL_RECT;
-    }
+    if (slot >= COLS * ROWS) return { u0: 0, v0: 0, u1: 0.001, v1: 0.001 };
     this.next += 1;
     const col = slot % COLS;
     const row = Math.floor(slot / COLS);
@@ -103,15 +94,10 @@ export class SignAtlas {
       v1: 1 - row / ROWS,
     };
     this.cache.set(key, rect);
-    // A sign painted after the textures were built still reaches the GPU.
-    if (this.map) {
-      this.map.needsUpdate = true;
-      this.emissive.needsUpdate = true;
-    }
     return rect;
   }
 
-  /** The two textures {map, emissive}, created on first call (so allocate every sign first). */
+  /** The two textures, built once every sign is allocated. */
   textures() {
     if (!this.map) {
       this.map = new THREE.CanvasTexture(this.color);
@@ -126,10 +112,8 @@ export class SignAtlas {
 }
 
 /**
- * A vertical sign quad hung on a building face, pushed into `batch` with the atlas UVs of `rect`.
- * `face` is 'n' | 's' | 'e' | 'w' (which wall it hangs on), `cx`/`cz` the wall's centre, `w` the
- * sign width, `y` its bottom, `h` its height, `offset` how far it stands off the wall, and
- * `color` a vertex tint (white shows the painted sign as is).
+ * A vertical sign quad on a building face. `face` is 'n' | 's' | 'e' | 'w' (which wall it hangs on),
+ * `cx`/`cz` the wall's centre, `w` the sign width, `y` its bottom, `h` its height.
  */
 export function addSignQuad(batch, rect, face, cx, y, cz, w, h, offset = 0.12, color = '#ffffff') {
   const uv = [[rect.u0, rect.v0], [rect.u1, rect.v0], [rect.u1, rect.v1], [rect.u0, rect.v1]];
@@ -140,8 +124,5 @@ export function addSignQuad(batch, rect, face, cx, y, cz, w, h, offset = 0.12, c
   else batch.quad([cx - offset, y, cz - hw], [cx - offset, y, cz + hw], [cx - offset, y + h, cz + hw], [cx - offset, y + h, cz - hw], [-1, 0, 0], uv, color);
 }
 
-/**
- * UVs for a plain coloured wall panel (doors, shutters) placed with addSignQuad: a single dark
- * texel of the atlas, so the panel takes its vertex colour and still shares the sign material.
- */
+/** A plain coloured wall panel (doors, shutters) placed like a sign. */
 export const PANEL_UV = { u0: 0, v0: 0, u1: 0, v1: 0 };
