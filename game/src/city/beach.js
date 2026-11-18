@@ -1,6 +1,7 @@
-// Coral Strand's beach and the sea: sloping sand, the animated water shader with sun glitter and
+// Coral Strand's beach and the sea: the sloping sand, the animated water shader with sun glitter and
 // shore foam, Halcyon Pier on its pylons with the pavilion, the turning ferris wheel, umbrellas,
-// towels and the lifeguard tower.
+// towels and the lifeguard tower. Exports buildBeach(layout, textures, colliders), which returns the
+// group plus the handles world.js uses to animate the water and the wheel every frame.
 import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { MeshBatch } from './batch.js';

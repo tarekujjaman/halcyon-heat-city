@@ -1,5 +1,7 @@
-// A merged-geometry batch: thousands of boxes, quads and cylinders pushed into one BufferGeometry so
-// a whole district draws in one call. Vertex colours carry each piece's tint, UVs its texture repeat.
+// Merged-geometry batching for the city builders: thousands of quads, floors, boxes and cylinders are
+// pushed into one BufferGeometry so a whole district draws in a single call. Vertex colours carry each
+// piece's tint and the UVs its texture repeat. Exports the MeshBatch class that ground, roads,
+// buildings, props and beach fill and then turn into a mesh.
 import * as THREE from 'three';
 
 const tmpColor = new THREE.Color();

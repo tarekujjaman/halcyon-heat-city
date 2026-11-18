@@ -1,6 +1,7 @@
 // Side activities: three street races against AI drivers through checkpoints, taxi fares picked
 // up in a stolen cab and paid by distance, twenty sea-glass shards hidden across the districts,
 // the paint shops that repaint, repair and shake the cops, and the safehouses that save and heal.
+// Exports createActivities(G), which places the markers and shards and steps the active race or fare.
 import * as THREE from 'three';
 import { ECONOMY } from './config.js';
 import { createDriver } from './vehicles/driver.js';

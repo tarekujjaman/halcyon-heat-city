@@ -1,6 +1,7 @@
-// The road network as a graph for drivers: lane points on each approach and exit of every
+// The road network as a graph for AI drivers: lane points on each approach and exit of every
 // intersection, neighbours by compass direction, turn options, the causeway dead end, and a
-// breadth-first route between two intersections that police and mission cars follow.
+// breadth-first route between two intersections that police and mission cars follow. Exports the
+// compass helpers (DIRS, OPPOSITE, dirVec, rightVec, yawOfDir, dirOfYaw, laneOffset) and createNavigation.
 import { CITY } from './config.js';
 
 export const DIRS = ['n', 'e', 's', 'w'];

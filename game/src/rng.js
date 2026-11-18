@@ -1,5 +1,7 @@
-// Seeded random numbers (mulberry32): the city, traffic and screenshot scenes are the same for the
-// same seed, so a layout bug or a screenshot can be reproduced exactly.
+// Seeded random numbers (mulberry32) so the city, traffic and screenshot scenes are identical for the
+// same seed and any layout bug or screenshot can be reproduced exactly. Exports createRng(seed) with
+// next/range/int/pick/chance/sign/shuffle, a shared gameplay stream (seedShared, frand, frange, fpick)
+// and hash2 for a stable value from two coordinates.
 
 export function createRng(seed) {
   let a = (seed >>> 0) || 1;

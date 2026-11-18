@@ -1,6 +1,7 @@
-// The world: the scene with the city built from the seeded plan (ground, roads, buildings, props,
-// beach and sea), the static colliders, the sky and clock, and the per-frame update of what moves
-// in the scenery (water, ferris wheel, lights by time of day).
+// The world: the THREE scene with the city built from the seeded plan (ground, roads, buildings, props,
+// beach and sea), the shared texture set and sign atlas, the static colliders, the sky and the clock.
+// Exports createWorld(seed), which returns the scene, layout and colliders together with the per-frame
+// update of what moves in the scenery (water, ferris wheel, lights by time of day).
 import * as THREE from 'three';
 import { buildLayout } from './city/layout.js';
 import { buildGround } from './city/ground.js';

@@ -1,6 +1,7 @@
 // Money, reputation and property: cash earned and spent, reputation points that climb the ranks
-// from Nobody to Legend and unlock weapons and missions, the safehouses Sol owns, and the stats
-// the pause menu and the mission-complete screen show.
+// from Nobody to Legend and unlock weapons and missions, the safehouses Sol owns, and the run
+// statistics the pause menu and the mission-complete screen show. Exports createEconomy(G) with
+// addMoney and spend, the rep level and name helpers, and the stats object other systems increment.
 import { ECONOMY, WEAPONS } from './config.js';
 
 export function createEconomy(G) {

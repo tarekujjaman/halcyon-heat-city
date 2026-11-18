@@ -1,5 +1,7 @@
-// Roads: every segment with lane markings, the intersections with crosswalks and stop lines, the
-// Pelican Causeway over the harbour mouth and the dock quay. One merged mesh per surface type.
+// Road surfaces of the city: every road segment with lane markings, each intersection with crosswalks
+// and stop lines, the Pelican Causeway over the harbour mouth and the dock quay, merged into one mesh
+// per surface type (road, asphalt, paint, concrete). Exports buildRoads(layout, textures, colliders),
+// which returns the THREE.Group that world.js adds to the scene.
 import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { MeshBatch } from './batch.js';

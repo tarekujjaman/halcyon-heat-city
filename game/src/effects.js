@@ -1,5 +1,7 @@
-// Particles and flashes in two point clouds (soft smoke, additive glow): tyre and engine smoke,
-// hit sparks, muzzle flashes, bullet tracers, flames, explosions and the police searchlight beam.
+// Visual effects: two pooled point clouds (soft smoke and additive glow) carry every particle in the
+// game, alongside the bullet tracers and the police searchlight beam. Spawners for tyre and engine
+// smoke, hit sparks, muzzle flashes, flames and explosions. Exports createEffects, which returns the
+// spawner API the gameplay systems call and the per-frame update that ages and recycles particles.
 import * as THREE from 'three';
 import { frand } from './rng.js';
 

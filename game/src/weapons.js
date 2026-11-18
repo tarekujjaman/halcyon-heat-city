@@ -1,6 +1,7 @@
-// The arsenal: fists, pistol, SMG and shotgun with ammo and clips, weapon switching by number
-// keys and mouse wheel, reputation unlocks, firing with spread and pellets, muzzle flash, tracers
-// and the crime each shot is. Hits are resolved by combat.js.
+// The arsenal: fists, pistol, SMG and shotgun with ammo and clips, weapon switching by number keys
+// and mouse wheel, reputation unlocks, firing with spread and pellets, reloading, muzzle flash,
+// tracers and the crime each shot reports to the wanted system. Hits are resolved by combat.js.
+// Exports createWeapons(G), the inventory and fire/switch/update API the player and HUD use.
 import * as THREE from 'three';
 import { WEAPONS } from './config.js';
 import { KEYS } from './input.js';

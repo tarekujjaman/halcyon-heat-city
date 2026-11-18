@@ -1,6 +1,7 @@
 // Saving and loading: three manual slots and an autosave in localStorage (every access wrapped in
-// try/catch), a snapshot of the whole run (position, car, money, reputation, missions, weapons,
-// shards, time of day, wanted level, settings) and the restore that puts it all back.
+// try/catch), a versioned snapshot of the whole run (position, car, money, reputation, missions,
+// weapons, shards, time of day, wanted level, settings) and the restore that puts it all back while
+// refusing newer or malformed snapshots. Exports SAVE_VERSION and createSave(G).
 import { SAVE_PREFIX, TIME } from './config.js';
 
 export const SAVE_VERSION = 3;

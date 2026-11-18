@@ -1,6 +1,7 @@
 // Pedestrians: people walking the sidewalk graph of the blocks nearest the player, crossing at the
 // corners, panicking and running from gunfire and crashes, knocked down by cars, drivers fleeing a
-// stolen car, and the fares that hail a taxi.
+// stolen car, and the fares that hail a taxi. Exports createPedestrians(G), which spawns and despawns
+// people around the player and steps every ped (walk, panic, knocked, dead) each frame.
 import { PEDS, WANTED } from './config.js';
 import { createCharacter, civilianLook } from './characters.js';
 import { createRng, frand } from './rng.js';

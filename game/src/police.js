@@ -1,6 +1,7 @@
-// Halcyon PD: cruisers with sirens and flashing lightbars that route by road to the search area
-// and ram once they see Sol, officers who step out to shoot and arrest, roadblocks across her
-// path from three stars, and the helicopter with its searchlight from four.
+// Halcyon PD, the response to the wanted level: cruisers with sirens and flashing lightbars that route
+// by road to the search area and ram once they see Sol, officers who step out to shoot and arrest,
+// roadblocks across her path from three stars, and the helicopter with its searchlight from four.
+// Exports createPolice(G), which spawns, steps and clears the force as the wanted level changes.
 import * as THREE from 'three';
 import { POLICE, WANTED } from './config.js';
 import { createDriver } from './vehicles/driver.js';

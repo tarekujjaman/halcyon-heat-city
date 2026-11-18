@@ -1,6 +1,7 @@
-// Every texture the game uses is painted here on a canvas at start-up: windows by building style
-// (with a matching lit-window emissive map for the night), road surfaces with lane markings,
-// pavement, sand, grass, boardwalk planks, corrugated steel, neon and shop signs. No image files.
+// Procedural textures: every texture the game uses is painted on a canvas at start-up, no image files.
+// Windows by building style (with a matching lit-window emissive map for the night), road surfaces
+// with lane markings, pavement, sand, grass, boardwalk planks, corrugated steel, containers, neon, shop
+// signs and the particle glow. Exports one *Texture() painter per surface and createTextureSet() for all.
 import * as THREE from 'three';
 import { createRng } from './rng.js';
 

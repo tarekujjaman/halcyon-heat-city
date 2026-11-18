@@ -1,6 +1,7 @@
-// An AI driver for any vehicle: follows lane points through intersections with pure-pursuit
-// steering, keeps its lane, stops at red lights and behind obstacles, waits until the exit is clear,
-// and can chase a target directly. Traffic, police and mission cars all drive with this.
+// AI driver for any vehicle: follows lane points through intersections with pure-pursuit steering,
+// keeps its lane, stops at red lights and behind obstacles, waits until the exit is clear, reverses
+// when stuck and can chase a target directly. Traffic, police and mission cars all drive with this.
+// Exports createDriver(vehicle, nav, options), the driver its owner resets onto a lane and steps each frame.
 import { OPPOSITE, yawOfDir } from '../navigation.js';
 import { frand } from '../rng.js';
 

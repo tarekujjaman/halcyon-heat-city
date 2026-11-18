@@ -1,6 +1,7 @@
 // The ground under everything: the kerbed pavement slab of every block, the lawns and lots inside
-// them, Glasswater Plaza with its fountain, the two parks, the hills beyond the city and the base
-// plane. Merged into a handful of meshes.
+// them chosen by district, Glasswater Plaza with its fountain, the two parks, the hills beyond the
+// city and the base plane, merged into a handful of meshes. Exports buildGround(layout, textures,
+// colliders), which returns the THREE.Group that world.js adds to the scene.
 import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { MeshBatch } from './batch.js';

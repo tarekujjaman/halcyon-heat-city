@@ -1,5 +1,7 @@
-// A sign atlas: every shop, hotel, bar and billboard text of the city is painted once into one big
-// canvas (and a glowing twin for the night), so all the signs of Halcyon Bay draw in one call.
+// Sign atlas for the city: every shop, hotel, bar and billboard text is painted once into one big
+// canvas (plus a glowing twin used as the emissive map at night), so all the signs of Halcyon Bay
+// draw in a single call. Exports the SignAtlas class that allocates a cell per text and builds the
+// textures, addSignQuad to place a cell on a building face, and the PANEL_UV constant.
 import * as THREE from 'three';
 
 const CELL_W = 512;

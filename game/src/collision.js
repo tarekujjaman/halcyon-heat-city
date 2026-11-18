@@ -1,6 +1,7 @@
-// Static collision: the buildings, walls, posts and water lines of the city in a spatial hash, with the
-// circle push-out that keeps people and cars out of walls and the 3D raycast that stops bullets and
-// pulls the camera in front of a building. Boxes are axis-aligned with a height; circles are posts.
+// Static collision for the city: every building, wall, post and water edge stored in a spatial hash of
+// axis-aligned boxes (with a height) and circles. Resolves the circle push-out that keeps people and
+// cars out of walls and the 3D raycast that stops bullets and pulls the camera in front of a building.
+// Exports the StaticColliders class and the circleOverlap helper that pedestrians and cars share.
 
 const CELL = 24;
 
