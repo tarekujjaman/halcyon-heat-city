@@ -277,6 +277,8 @@ export async function stageShot(name, G) {
     document.getElementById('menus').classList.add('side');
     document.getElementById('hud').classList.remove('dimmed');
     G.hud.update(0.016);
+    // The results card sits where the district title card would; hide the latter so they never overlap.
+    document.getElementById('district').style.display = 'none';
     return;
   }
 
@@ -311,12 +313,19 @@ export async function stageShot(name, G) {
     const cam = { x: L.pier.x - ux * 120 - uz * 50, y: 62, z: L.pier.z - uz * 120 + ux * 50 };
     G.camera.camera.fov = 55;
     G.camera.camera.updateProjectionMatrix();
-    placeCamera(G, cam, { x: L.pier.x + ux * 110, y: 4, z: L.pier.z + uz * 110 });
+    placeCamera(G, cam, { x: L.pier.x + ux * 110, y: 26, z: L.pier.z + uz * 110 });
     G.world.scene.fog.near = 200;
     G.world.scene.fog.far = 1400;
     G.world.scene.fog.color.set('#ffb070');
     G.renderer.toneMappingExposure = 1.2;
     G.world.sky.sun.color.set('#ffb468');
+    // Keep the player out of the shot and hide any car that would clip at the frame edge.
+    G.player.model.group.visible = false;
+    const ndc = new THREE.Vector3();
+    for (const v of G.fleet.vehicles) {
+      ndc.set(v.x, v.y, v.z).project(G.camera.camera);
+      if (v.owner === 'player' || Math.abs(ndc.x) > 0.85 || ndc.y < -0.8 || ndc.z > 1) v.model.root.visible = false;
+    }
     finish();
     return;
   }
