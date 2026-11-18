@@ -1,7 +1,7 @@
 // Plays HALCYON HEAT in headless Chrome over the DevTools protocol and checks every system:
 // title menu, new game, walking and the camera, stealing and driving, the chase camera and
 // steering directions, acceleration and fair damage, traffic and pedestrians, the wanted level
-// from 1 to 5 stars, losing the police, arrest and hospital, every weapon, all seven story
+// from 1 to 5 stars, losing the police, arrest and hospital, every weapon, all eight story
 // missions start to end, the side activities, the map, saving and loading, radio and menus,
 // and frame-rate independence. Fails on any console error. Usage: node tools/playtest.mjs [section]
 import { startServer, launchChrome, connectPage } from './chrome.mjs';
@@ -758,7 +758,22 @@ async function main() {
     await finishMission('bank');
     check('bank: heat cleared at the garage', (await ev('__game.wanted.stars')) === 0);
 
-    // 7. High Tide
+    // 7. Pier Pressure
+    await startMission('pier');
+    await skipTalk();
+    await adv(0.3);
+    await ev('(() => { const G = __game; const c = G.missions.current.ctx.data.car; G.player.enterVehicle(c); })()');
+    await adv(0.5);
+    await skipTalk();
+    await expectStage('pier', 2, 'run the roadblock to Pelican Key');
+    check('pier: three stars once the car is taken', (await ev('__game.wanted.stars')) >= 3);
+    await ev('(() => { const G = __game; const lh = G.world.layout.landmarks.lighthouse; const c = G.player.vehicle; c.x = lh.x + 8; c.z = lh.z + 6; c.vx = 0; c.vz = 0; G.police.clearAll(); })()');
+    await adv(0.5);
+    await skipTalk();
+    await finishMission('pier');
+    check('pier: heat cleared on Pelican Key', (await ev('__game.wanted.stars')) === 0);
+
+    // 8. High Tide
     await startMission('tide');
     await skipTalk();
     check('tide: shotgun and smg given', await ev('__game.weapons.inv.shotgun.owned && __game.weapons.inv.smg.owned'));
@@ -777,7 +792,7 @@ async function main() {
     await adv(0.5);
     await skipTalk();
     await finishMission('tide');
-    check('story complete', await ev('__game.missions.nextMission() === null && __game.missions.completed.size === 7'));
+    check('story complete', await ev('__game.missions.nextMission() === null && __game.missions.completed.size === 8'));
     check('story complete screen names the end', (await ev('document.getElementById("cp-next").textContent')).length > 0);
     await ev('__game.player.godMode = false; 0');
 
@@ -888,7 +903,7 @@ async function main() {
     await adv(0.2);
     s = await state();
     check('load restores position, money and time', near(s.x, saved.x, 1) && near(s.z, saved.z, 1) && s.money === savedMoney && near(await ev('__game.world.sky.hour'), await ev('(() => JSON.parse(localStorage.getItem("halcyon-heat-slot-2")).hour)()'), 0.05), `pos ${s.x.toFixed(1)},${s.z.toFixed(1)} vs ${saved.x.toFixed(1)},${saved.z.toFixed(1)}; money ${s.money}`);
-    check('load restores missions and weapons', (await ev('__game.missions.completed.size')) === 7 && (await ev('__game.weapons.inv.shotgun.owned')));
+    check('load restores missions and weapons', (await ev('__game.missions.completed.size')) === 8 &&(await ev('__game.weapons.inv.shotgun.owned')));
     check('load keeps the game playing', (await ev('__game.state')) === 'playing');
     // Save while driving: the car comes back with the player inside it.
     await ev('(() => { const G = __game; const L = G.world.layout; const v = G.fleet.spawn("pickup", L.roadX(6) + 1.75, L.roadZ(5) + 25, Math.PI, { role: "player", owner: "player", color: "#2f4858" }); G.player.teleport(v.x + 2.5, v.z, 0); G.player.enterVehicle(v); })()');
@@ -907,7 +922,7 @@ async function main() {
     check('continue enabled with a save', !(await ev('document.getElementById("btn-continue").classList.contains("disabled")')));
     await clickEl('#btn-continue');
     await adv(0.2);
-    check('continue resumes the latest save', (await ev('__game.state')) === 'playing' && (await ev('__game.missions.completed.size')) === 7);
+    check('continue resumes the latest save', (await ev('__game.state')) === 'playing' && (await ev('__game.missions.completed.size')) === 8);
 
     // ---------------------------------------------------------------- radio and audio
     section('radio');

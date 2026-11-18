@@ -415,6 +415,60 @@ export function storyMissions(L) {
       ],
     },
     {
+      id: 'pier', title: 'Pier Pressure', giver: 'ruiz', start: L.plaza, reward: { money: 6500, rep: 100 },
+      brief: "Steal Kane's marked car from Saltmarsh Docks and run it through the roadblocks to Pelican Key.",
+      stages: [
+        {
+          objective: 'Listen to Detective Ruiz',
+          enter(ctx) {
+            ctx.actor('ruiz', L.plaza.x + 2, L.plaza.z + 9);
+            ctx.say('ruiz', 'Kane is moving tonight. His crew marked a white sedan at Saltmarsh Docks: the ledgers are in the trunk.');
+            ctx.say('sol', 'And you want me to drive it past your own roadblocks.');
+            ctx.say('ruiz', 'I want it on Pelican Key, in one piece. The uniforms do not know whose side I am on. Neither should you.');
+          },
+          update: (ctx) => (ctx.talking() ? null : 'next'),
+        },
+        {
+          objective: 'Steal the marked car at Saltmarsh Docks',
+          enter(ctx) {
+            const s = L.docksYardRoad;
+            ctx.data.car = ctx.spawnCar('sedan', s.x, s.z, 0, { color: '#f4f1e8', parked: true });
+          },
+          update(ctx) {
+            const c = ctx.data.car;
+            if (c.wrecked) return 'fail:The marked car was wrecked';
+            ctx.waypoint(c.x, c.z);
+            if (ctx.player.vehicle === c) {
+              ctx.setWanted(3);
+              ctx.say('radio', 'Sol, HBPD just put a roadblock on the causeway. Go through it or around it, but go!');
+              return 'next';
+            }
+            return null;
+          },
+        },
+        {
+          objective: 'Outrun the roadblock to Pelican Key',
+          enter(ctx) {
+            const lh = L.lighthouse;
+            ctx.goTo(lh.x + 8, lh.z + 6, { radius: 12, needVehicle: true, label: 'Pelican Key' });
+            ctx.hint('Ram the gap between the cruisers, or take the beach road around them');
+          },
+          update(ctx) {
+            if (ctx.data.car.wrecked) return 'fail:The marked car was wrecked';
+            if (ctx.reached()) {
+              ctx.setWanted(0);
+              ctx.releaseVehicle(ctx.data.car);
+              ctx.say('ruiz', 'Ledgers are safe. Kane will know it was you by morning.');
+              ctx.say('sol', 'Good. Let him come.');
+              return 'next';
+            }
+            return null;
+          },
+        },
+        { objective: '', enter() {}, update: (ctx) => (ctx.talking() ? null : 'next') },
+      ],
+    },
+    {
       id: 'tide', title: 'High Tide', giver: 'teo', start: L.garage, reward: { money: 10000, rep: 150 }, finale: true,
       brief: 'Kane has Dani at Halcyon Pier. End it.',
       stages: [

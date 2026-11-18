@@ -172,19 +172,23 @@ export async function stageShot(name, G) {
 
   if (name === 'onfoot') {
     const b = L.gangBar;
-    G.world.sky.setHour(18.8);
+    G.world.sky.setHour(17.9);
     G.player.revive(b.x + 1, b.z + 10, Math.PI);
-    G.economy.money = 2180;
+    G.missions.restore({ completed: ['welcome', 'clock', 'neon'] });
+    G.world.sky.state.day = 2;
+    G.economy.money = 14820;
+    G.economy.rep = 215;
     G.player.health = 64;
     G.player.armor = 30;
     G.weapons.give('pistol', 48);
+    G.weapons.give('smg', 90);
     G.weapons.select('pistol');
     G.wanted.setStars(1);
     G.wanted.search.x = b.x;
     G.wanted.search.z = b.z;
     G.wanted.search.r = 90;
     G.hud.setObjective('Deal with the Tide Runners');
-    const squad = G.gangs.spawnSquad([{ x: b.x - 4.5, z: b.z + 3 }, { x: b.x + 5, z: b.z + 2, weapon: 'smg' }, { x: b.x - 1, z: b.z + 5.5 }, { x: b.x + 9, z: b.z + 4.5 }]);
+    const squad = G.gangs.spawnSquad([{ x: b.x - 2.6, z: b.z + 4.2 }, { x: b.x + 3.2, z: b.z + 3.4, weapon: 'smg' }, { x: b.x + 0.2, z: b.z + 2.2 }]);
     crowd(G, [[b.x - 12, b.z + 6, true], [b.x - 9, b.z + 9, true], [b.x + 13, b.z + 7, true], [b.x + 16, b.z + 11, true], [b.x - 16, b.z + 12, true], [b.x + 7, b.z + 14, true]], { x: b.x, z: b.z });
     G.traffic.spawnCar({ x: b.x - 26, z: b.z + 20.5, yaw: Math.PI / 2, node: G.nav.node(8, 4), dir: 'e', lane: 0 }, 'coupe');
     G.traffic.spawnCar({ x: b.x + 24, z: b.z + 14.5, yaw: -Math.PI / 2, node: G.nav.node(8, 4), dir: 'w', lane: 1 }, 'taxi');
@@ -192,19 +196,30 @@ export async function stageShot(name, G) {
     G.camera.update(0.016, G.player.focus(new THREE.Vector3()), 'foot', null, G.input, G.world.colliders, window.innerWidth);
     G.simulate(0.7, 1 / 60);
     G.player.aimTimer = 3;
-    G.camera.snapTo(Math.PI + 0.22, 0.14);
-    G.camera.update(0.016, G.player.focus(new THREE.Vector3()), 'foot', null, G.input, G.world.colliders, window.innerWidth);
-    G.player.yaw = Math.PI + 0.22;
+    G.player.yaw = Math.PI + 0.08;
     G.simulate(0.02, 1 / 60);
     G.weapons.cooldown = 0;
     G.weapons.fire();
     G.gangs.shoot(squad[0]);
     G.gangs.shoot(squad[1]);
-    G.hud.say('Rico', 'Kane says the debt is forgiven. Now beat it, driver.', 8, '#ff6b4a');
+    G.gangs.shoot(squad[2]);
     G.simulate(1 / 60, 1 / 60);
-    G.camera.update(0.016, G.player.focus(new THREE.Vector3()), 'foot', null, G.input, G.world.colliders, window.innerWidth);
+    // Over Sol's right shoulder, close, the three Runners big in frame; a dusk grade bright enough
+    // to read the street under the neon.
+    G.camera.camera.fov = 58;
+    G.camera.camera.updateProjectionMatrix();
+    const p = G.player;
+    placeCamera(G, { x: p.x + 1.1, y: 2.25, z: p.z + 3.1 }, { x: b.x + 0.4, y: 1.25, z: b.z + 2.5 });
+    G.renderer.toneMappingExposure = 1.3;
+    G.world.sky.sun.color.set('#ffc890');
+    G.world.scene.fog.color.set('#c89a8a');
+    G.world.scene.traverse((o) => {
+      if (o.isHemisphereLight) { o.color.set('#ffe0c0'); o.groundColor.set('#8a7a90'); o.intensity *= 1.4; }
+    });
     finish();
     G.hud.say('Rico', 'Kane says the debt is forgiven. Now beat it, driver.', 8, '#ff6b4a');
+    G.hud.stunt('TAKEDOWN', 350, '', 'takedown');
+    G.hud.hitMarker(false);
     G.hud.update(0.016);
     return;
   }
@@ -227,27 +242,82 @@ export async function stageShot(name, G) {
   }
 
   if (name === 'mission') {
-    G.missions.restore({ completed: ['welcome', 'clock', 'neon', 'tail', 'docks'] });
+    // Pier Pressure (mission 7 of 8) just paid out: the white sedan parked on Ocean Drive at sunset,
+    // the compact results card at the right edge and the full HUD undimmed beside it.
+    G.missions.restore({ completed: ['welcome', 'clock', 'neon', 'tail', 'docks', 'bank'] });
+    G.world.sky.state.day = 2;
     G.economy.stats.carsStolen = 23;
-    G.economy.stats.escapes = 6;
+    G.economy.stats.escapes = 7;
     G.activities.restore({ shards: [0, 1, 3, 5, 7, 9, 11, 13, 15], racesWon: { coast: 1, downtown: 1 } });
-    G.player.distanceDriven = 42300;
-    const spot = L.bankRoad;
-    G.world.sky.setHour(17.7);
-    const car = G.fleet.spawn('coupe', spot.x, spot.z + 6, 0, { color: '#ffd166', role: 'player', owner: 'player' });
-    G.player.revive(spot.x - 4, spot.z + 2, Math.PI / 2);
+    G.player.distanceDriven = 48600;
+    G.world.sky.setHour(17.55);
+    const x = layout.roadX(4) + 30;
+    const z = layout.oceanZ + 1.75;
+    const car = G.fleet.spawn('sedan', x, z, Math.PI / 2 - 0.25, { color: '#f4f1e8', role: 'player', owner: 'player' });
+    G.player.revive(x - 2.5, z + 3.2, Math.PI);
+    G.weapons.give('pistol', 64);
+    G.weapons.give('smg', 120);
+    G.weapons.select('smg');
+    crowd(G, [[x + 6, layout.boardwalkZ + 2.5, false], [x - 8, layout.boardwalkZ + 3, false], [x + 14, layout.oceanZ - 9, false], [x - 14, layout.oceanZ - 8.6, false]], { x, z });
+    G.traffic.spawnCar({ x: x + 26, z: layout.oceanZ - 5.25, yaw: -Math.PI / 2, node: G.nav.node(5, 9), dir: 'w', lane: 1 }, 'taxi');
     G.simulate(0.4, 1 / 60);
-    const bank = G.missions.defs.find((d) => d.id === 'bank');
+    const pier = G.missions.defs.find((d) => d.id === 'pier');
     const tide = G.missions.defs.find((d) => d.id === 'tide');
-    G.missions.completed.add('bank');
-    G.economy.money = 9850;
-    G.economy.rep = 295;
-    G.economy.stats.missions = 6;
-    // From above the road, clear of the pavement palms, with the towers behind the panel.
-    const cam = { x: car.x - 6, y: 9.5, z: car.z + 24 };
-    placeCamera(G, cam, { x: car.x + 12, y: 13, z: car.z - 30 });
+    G.missions.completed.add('pier');
+    G.economy.money = 21480;
+    G.economy.rep = 395;
+    G.economy.stats.missions = 7;
+    // Low on the hotel side, the car in the left half of the frame, the beach and sunset sky behind.
+    G.camera.camera.fov = 52;
+    G.camera.camera.updateProjectionMatrix();
+    placeCamera(G, { x: car.x + 7, y: 2.6, z: car.z - 9 }, { x: car.x - 7, y: 2.4, z: car.z + 4 });
+    G.renderer.toneMappingExposure = 1.2;
     finish();
-    G.menus.showMissionComplete({ def: bank, money: 5000, rep: 80, levelUp: true, next: tide, finale: false });
+    G.menus.showMissionComplete({ def: pier, money: pier.reward.money, rep: pier.reward.rep, levelUp: false, next: tide, finale: false });
+    document.getElementById('menus').classList.add('side');
+    document.getElementById('hud').classList.remove('dimmed');
+    G.hud.update(0.016);
+    return;
+  }
+
+  if (name === 'vista') {
+    // High over Coral Strand at golden hour: the beach, the pier and its ferris wheel below, Ocean
+    // Drive's traffic and the boardwalk crowd, the Glasswater towers behind, the district card up.
+    G.missions.restore({ completed: ['welcome', 'clock', 'neon', 'tail'] });
+    G.world.sky.state.day = 2;
+    G.economy.money = 18640;
+    G.economy.rep = 260;
+    G.weapons.give('pistol', 48);
+    G.weapons.select('pistol');
+    G.world.sky.setHour(17.5);
+    const ps = L.pierStart;
+    for (let i = 0; i < 6; i += 1) {
+      const tx = ps.x - 70 + i * 26;
+      G.traffic.spawnCar({ x: tx, z: layout.oceanZ + (i % 2 ? 1.75 : 5.25), yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: i % 2 ? 0 : 1 }, ['taxi', 'sedan', 'coupe', 'pickup', 'van', 'taxi'][i]);
+      G.traffic.spawnCar({ x: tx + 12, z: layout.oceanZ - (i % 2 ? 1.75 : 5.25), yaw: -Math.PI / 2, node: G.nav.node(5, 9), dir: 'w', lane: i % 2 ? 0 : 1 }, ['sedan', 'coupe', 'taxi', 'van', 'sedan', 'pickup'][i]);
+    }
+    const walkers = [];
+    for (let i = 0; i < 18; i += 1) walkers.push([ps.x - 45 + i * 5, layout.boardwalkZ + 1.5 + (i % 3) * 1.5, false]);
+    for (let i = 0; i < 8; i += 1) walkers.push([ps.x - 30 + i * 8, layout.shoreZ - 6 - (i % 2) * 4, false]);
+    crowd(G, walkers, ps);
+    G.player.revive(ps.x - 6, ps.z + 1, 0);
+    G.simulate(1.2, 1 / 60);
+    // From over the water, looking back inland past the pier toward the towers.
+    const dx = L.plaza.x - L.pier.x;
+    const dz = L.plaza.z - L.pier.z;
+    const n = Math.hypot(dx, dz) || 1;
+    const ux = dx / n;
+    const uz = dz / n;
+    const cam = { x: L.pier.x - ux * 120 - uz * 50, y: 62, z: L.pier.z - uz * 120 + ux * 50 };
+    G.camera.camera.fov = 55;
+    G.camera.camera.updateProjectionMatrix();
+    placeCamera(G, cam, { x: L.pier.x + ux * 110, y: 4, z: L.pier.z + uz * 110 });
+    G.world.scene.fog.near = 200;
+    G.world.scene.fog.far = 1400;
+    G.world.scene.fog.color.set('#ffb070');
+    G.renderer.toneMappingExposure = 1.2;
+    G.world.sky.sun.color.set('#ffb468');
+    finish();
     return;
   }
 

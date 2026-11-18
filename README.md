@@ -6,7 +6,7 @@
 An original 3D open-world crime game in the browser, set in Halcyon Bay: a sun-soaked coastal city at
 golden hour with five districts (Coral Strand, Glasswater Downtown, Neon Row, Palmetto Heights and
 Saltmarsh Docks), traffic, pedestrians, cars to steal, a five-star wanted system with cruisers, roadblocks
-and a helicopter, seven story missions, street races, taxi fares, sea-glass shards, paint shops and
+and a helicopter, eight story missions, street races, taxi fares, sea-glass shards, paint shops and
 safehouses with saving. You play Marisol "Sol" Vega, a getaway driver back in town to pull her uncle Teo
 out of a debt to Kane Okafor's crew. Everything is built in code with three.js: geometry, canvas
 textures, synthesized sound and three procedural radio stations. No network requests at run time.
