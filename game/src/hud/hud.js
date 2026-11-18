@@ -122,7 +122,8 @@ export function createHud(G) {
   // Weapon hotbar slots, built once.
   const slotEls = SLOT_IDS.map((id, i) => {
     const slot = document.createElement('div');
-    slot.className = id ? 'slot' : 'slot empty';
+    // "hotslot", not "slot": the menus' save-slot buttons are class "btn slot".
+    slot.className = id ? 'hotslot' : 'hotslot empty';
     const num = document.createElement('span');
     num.className = 'num';
     num.textContent = String(i + 1);
