@@ -1,52 +1,44 @@
-// The ground under everything: the kerbed pavement slab of every block with the lawn or lot
-// surface inside it, Glasswater Plaza with its fountain and planters, the two parks, the Ocean
-// Drive boardwalk, the grass verges, the hills beyond the city and the base plane under it all.
-// Merged into a handful of static meshes. Exports buildGround(layout, textures, colliders) -> THREE.Group.
+// The ground under everything: the kerbed pavement slab of every block, the lawns and lots inside
+// them, Glasswater Plaza with its fountain, the two parks, the hills beyond the city and the base
+// plane. Merged into a handful of meshes.
 import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { MeshBatch } from './batch.js';
 
-/** The surface inside a block's pavement ring by district: a tinted concrete lot, or grass. */
-const LOT_SURFACE = {
-  palmetto: { grass: true },
-  saltmarsh: { color: '#8d8a84' },
-  coral: { color: '#d9cfb8' },
-  neon: { color: '#6e6a70' },
-  default: { color: '#b9b5ae' },
-};
-/** Lot and lawn surfaces sit just above the kerb slab so they never z-fight with it. */
-const SURFACE_LIFT = 0.01;
-/** Hills: `[x, z, radius, height]` squashed domes north and east, far enough to sit in the fog. */
-const HILL_SPOTS = (north) => [
-  [-250, north - 120, 150, 42], [-60, north - 150, 190, 58], [160, north - 130, 160, 46], [360, north - 160, 220, 66],
-  [CITY.x0 + CITY.width + 160, north + 60, 150, 44], [CITY.x0 + CITY.width + 190, north + 260, 180, 52], [CITY.x0 + CITY.width + 150, north + 440, 140, 38],
-  [-420, north - 60, 140, 36], [520, north - 60, 150, 40],
-];
-const HILL_COLOR = '#6f9a5a';
-const HILL_SHADE = '#789f60';
-
-/**
- * Build every ground surface of the plan into one group. The plaza adds its fountain and planter
- * colliders in place; nothing else here blocks movement.
- */
 export function buildGround(layout, textures, colliders) {
   const group = new THREE.Group();
   const pavement = new MeshBatch();
   const lots = new MeshBatch();
   const grass = new MeshBatch();
   const plazaBatch = new MeshBatch();
-  const surfaceY = CITY.kerb + SURFACE_LIFT;
 
   for (const block of layout.blocks) {
     pavement.box(block.x, 0, block.z, block.w, CITY.kerb, block.d, '#ffffff', [2, 2]);
     const inner = { x: block.x + CITY.sidewalk, z: block.z + CITY.sidewalk, w: block.w - 2 * CITY.sidewalk, d: block.d - 2 * CITY.sidewalk };
     if (block.special === 'plaza') {
-      buildPlaza(plazaBatch, inner, colliders);
+      buildPlaza(plazaBatch, inner, layout, colliders);
       continue;
     }
-    const surface = block.special === 'park' ? LOT_SURFACE.palmetto : LOT_SURFACE[block.district] || LOT_SURFACE.default;
-    if (surface.grass) grass.floor(inner.x, inner.z, inner.w, inner.d, surfaceY, '#ffffff', [3, 3]);
-    else lots.floor(inner.x, inner.z, inner.w, inner.d, surfaceY, surface.color, [4, 4]);
+    if (block.special === 'park') {
+      grass.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#ffffff', [3, 3]);
+      continue;
+    }
+    switch (block.district) {
+      case 'palmetto':
+        grass.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#ffffff', [3, 3]);
+        break;
+      case 'saltmarsh':
+        lots.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#8d8a84', [4, 4]);
+        break;
+      case 'coral':
+        lots.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#d9cfb8', [4, 4]);
+        break;
+      case 'neon':
+        lots.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#6e6a70', [4, 4]);
+        break;
+      default:
+        lots.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#b9b5ae', [4, 4]);
+    }
   }
 
   // The boardwalk along Ocean Drive (a wooden promenade) and its kerb.
@@ -58,8 +50,10 @@ export function buildGround(layout, textures, colliders) {
   verge.floor(layout.quayX, north - 60, CITY.width + 60 - (layout.quayX - CITY.x0), 60, 0.1, '#ffffff', [6, 6]);
   verge.floor(CITY.x0 + CITY.width, north, 60, layout.oceanZ + CITY.road / 2 - north, 0.1, '#ffffff', [6, 6]);
 
+  // Hills: squashed domes north and east, far enough to sit in the fog.
   const hills = new MeshBatch();
-  for (const [hx, hz, r, h] of HILL_SPOTS(north)) addDome(hills, hx, hz, r, h);
+  const hillSpots = [[-250, north - 120, 150, 42], [-60, north - 150, 190, 58], [160, north - 130, 160, 46], [360, north - 160, 220, 66], [CITY.x0 + CITY.width + 160, north + 60, 150, 44], [CITY.x0 + CITY.width + 190, north + 260, 180, 52], [CITY.x0 + CITY.width + 150, north + 440, 140, 38], [-420, north - 60, 140, 36], [520, north - 60, 150, 40]];
+  for (const [hx, hz, r, h] of hillSpots) addDome(hills, hx, hz, r, h, '#6f9a5a');
 
   const pavementMat = new THREE.MeshStandardMaterial({ map: textures.pavement, vertexColors: true, roughness: 0.95 });
   const lotMat = new THREE.MeshStandardMaterial({ map: textures.concrete, vertexColors: true, roughness: 0.95 });
@@ -84,8 +78,8 @@ export function buildGround(layout, textures, colliders) {
   return group;
 }
 
-/** Glasswater Plaza inside `inner`: a paved square with diagonal bands, a fountain and four hedged planters. */
-function buildPlaza(batch, inner, colliders) {
+/** Glasswater Plaza: a paved square with a fountain ring, steps, planters and a stage. */
+function buildPlaza(batch, inner, layout, colliders) {
   const cx = inner.x + inner.w / 2;
   const cz = inner.z + inner.d / 2;
   batch.floor(inner.x, inner.z, inner.w, inner.d, CITY.kerb + 0.01, '#e9e2d3', [2, 2]);
@@ -108,8 +102,7 @@ function buildPlaza(batch, inner, colliders) {
   }
 }
 
-/** A hill: a quarter-sphere profile of `rings` bands, alternately shaded so the slope reads from afar. */
-function addDome(batch, cx, cz, r, h) {
+function addDome(batch, cx, cz, r, h, color) {
   const seg = 18;
   const rings = 6;
   for (let i = 0; i < rings; i += 1) {
@@ -123,7 +116,7 @@ function addDome(batch, cx, cz, r, h) {
       const a0 = (s / seg) * Math.PI * 2;
       const a1 = ((s + 1) / seg) * Math.PI * 2;
       const n = [Math.cos((a0 + a1) / 2) * 0.6, 0.8, Math.sin((a0 + a1) / 2) * 0.6];
-      const shade = i % 2 === 0 ? HILL_COLOR : HILL_SHADE;
+      const shade = i % 2 === 0 ? color : '#789f60';
       batch.quad(
         [cx + Math.cos(a1) * r0, y0, cz + Math.sin(a1) * r0], [cx + Math.cos(a0) * r0, y0, cz + Math.sin(a0) * r0],
         [cx + Math.cos(a0) * r1, y1, cz + Math.sin(a0) * r1], [cx + Math.cos(a1) * r1, y1, cz + Math.sin(a1) * r1],

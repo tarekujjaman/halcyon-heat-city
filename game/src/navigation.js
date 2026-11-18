@@ -1,40 +1,27 @@
-// The road network as a graph for drivers: the plan's intersections plus Pelican Key as one extra
-// node at the causeway's end, neighbours by compass direction, the lane points cars aim for on each
-// approach and exit, turn options, a breadth-first route police and racers follow, and random lane
-// spots to spawn traffic out of sight. Exports the compass helpers and createNavigation(layout).
+// The road network as a graph for drivers: lane points on each approach and exit of every
+// intersection, neighbours by compass direction, turn options, the causeway dead end, and a
+// breadth-first route between two intersections that police and mission cars follow.
 import { CITY } from './config.js';
 
-/** Compass directions, in the order every search tries them. */
 export const DIRS = ['n', 'e', 's', 'w'];
-/** Unit vector of travel per direction (north is -z). */
 const VEC = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
-/** The driver's right-hand side per direction of travel. */
 const RIGHT = { n: [1, 0], s: [-1, 0], e: [0, 1], w: [0, -1] };
 export const OPPOSITE = { n: 's', s: 'n', e: 'w', w: 'e' };
 const LEFT_OF = { n: 'w', w: 's', s: 'e', e: 'n' };
 const RIGHT_OF = { n: 'e', e: 's', s: 'w', w: 'n' };
-/** A car stops this far before the intersection box, and is clear of it this far after. */
-const STOP_BEFORE_BOX = 3.2;
-const EXIT_PAST_BOX = 2;
-/** The Pelican Key node sits this far back from the causeway's end on the island. */
-const KEY_NODE_INSET = 6;
 
-/** The [x, z] unit vector of travel for a direction. */
 export function dirVec(d) {
   return VEC[d];
 }
 
-/** The [x, z] unit vector pointing to a driver's right when travelling `d`. */
 export function rightVec(d) {
   return RIGHT[d];
 }
 
-/** The vehicle yaw that faces a direction (yaw 0 faces +z, i.e. south). */
 export function yawOfDir(d) {
   return d === 's' ? 0 : d === 'e' ? Math.PI / 2 : d === 'n' ? Math.PI : -Math.PI / 2;
 }
 
-/** The compass direction nearest a yaw. */
 export function dirOfYaw(yaw) {
   const fx = Math.sin(yaw);
   const fz = Math.cos(yaw);
@@ -42,24 +29,19 @@ export function dirOfYaw(yaw) {
   return fz > 0 ? 's' : 'n';
 }
 
-/** Metres from the road's centre line to the middle of lane 0 (kerbside) or lane 1 (inner), on the right. */
 export function laneOffset(lane) {
   return CITY.laneWidth / 2 + lane * CITY.laneWidth;
 }
 
-/** The graph over a layout: nodes are its intersections (`{i, j, x, z, phase}`) plus `keyNode` for Pelican Key (`key: true`). */
 export function createNavigation(layout) {
   const half = CITY.road / 2;
-  const keyNode = { i: -1, j: CITY.blocksZ, x: layout.causewayX2 - KEY_NODE_INSET, z: layout.oceanZ, key: true, phase: 0 };
-  const stopDistance = half + STOP_BEFORE_BOX;
+  const keyNode = { i: -1, j: CITY.blocksZ, x: layout.causewayX2 - 6, z: layout.oceanZ, key: true, phase: 0 };
 
-  /** The node at grid (i, j), the key node for (-1, blocksZ), or null off the grid. */
   function node(i, j) {
     if (i === -1 && j === CITY.blocksZ) return keyNode;
     return layout.intersectionAt(i, j);
   }
 
-  /** The node reached by leaving `n` in direction `d`, or null at the edge of the map. */
   function neighbor(n, d) {
     if (n.key) return d === 'e' ? node(0, CITY.blocksZ) : null;
     if (n.i === 0 && n.j === CITY.blocksZ && d === 'w') return keyNode;
@@ -67,7 +49,7 @@ export function createNavigation(layout) {
     return node(n.i + v[0], n.j + v[1]);
   }
 
-  /** The directions a driver can leave `n` by when it arrived travelling `d` (a U-turn only at a dead end). */
+  /** The directions a driver can leave `n` by when it arrived travelling `d`. */
   function turnOptions(n, d) {
     const out = [];
     for (const nd of DIRS) {
@@ -86,47 +68,50 @@ export function createNavigation(layout) {
     return { x: n.x + v[0] * along + r[0] * off, z: n.z + v[1] * along + r[1] * off };
   }
 
-  /** Where a car heading `d` on `lane` stops for the light at `n`. */
+  const stopDistance = half + 3.2;
+
   function stopPoint(n, d, lane) {
     return lanePoint(n, d, lane, -stopDistance);
   }
 
-  /** Where a car leaving `n` heading `d` on `lane` is clear of the box. */
   function exitPoint(n, d, lane) {
-    return lanePoint(n, d, lane, half + EXIT_PAST_BOX);
+    return lanePoint(n, d, lane, half + 2);
   }
 
-  /** Breadth-first route from node a to node b: the directions to drive, [] when a is b, null when unreachable. */
+  /** Breadth-first route from node a to node b: the list of directions to drive. */
   function route(a, b) {
-    if (!a || !b) return null;
     if (a === b) return [];
+    const key = (n) => `${n.i},${n.j}`;
     const prev = new Map();
     const queue = [a];
-    prev.set(a, null);
-    for (let head = 0; head < queue.length; head += 1) {
-      const n = queue[head];
+    prev.set(key(a), null);
+    while (queue.length) {
+      const n = queue.shift();
       if (n === b) break;
       for (const d of DIRS) {
         const m = neighbor(n, d);
-        if (!m || prev.has(m)) continue;
-        prev.set(m, { from: n, d });
+        if (!m || prev.has(key(m))) continue;
+        prev.set(key(m), { from: n, d });
         queue.push(m);
       }
     }
-    if (!prev.has(b)) return null;
+    if (!prev.has(key(b))) return null;
     const dirs = [];
-    for (let step = prev.get(b); step; step = prev.get(step.from)) dirs.push(step.d);
-    dirs.reverse();
+    let cur = b;
+    while (prev.get(key(cur))) {
+      const p = prev.get(key(cur));
+      dirs.unshift(p.d);
+      cur = p.from;
+    }
     return dirs;
   }
 
-  /** The nearest node and the direction of travel implied by a position and yaw. */
+  /** The nearest intersection and the direction of travel implied by a position and yaw. */
   function locate(x, z, yaw) {
     const n = nearestNode(x, z);
     return { node: n, dir: dirOfYaw(yaw) };
   }
 
-  /** The nearest node to a point: on the causeway, whichever end is closer; elsewhere the nearest intersection. */
   function nearestNode(x, z) {
     if (x < layout.causewayX1 - half && Math.abs(z - layout.oceanZ) < half + 2) {
       return x < (layout.causewayX1 + layout.causewayX2) / 2 ? keyNode : node(0, CITY.blocksZ);
@@ -135,9 +120,8 @@ export function createNavigation(layout) {
   }
 
   /**
-   * A random lane position between minDist and maxDist metres from (x, z), heading along its road:
-   * used to spawn traffic and police out of sight. Returns `{x, z, yaw, node, dir, lane}` with
-   * `node` the intersection ahead, or null when `tries` attempts found nothing.
+   * A random road position near (x, z) at roughly `dist` metres, with the lane heading: used to
+   * spawn traffic and police out of sight. Returns {x, z, yaw, node, dir, lane} or null.
    */
   function randomLaneSpot(rng, x, z, minDist, maxDist, tries = 12) {
     for (let t = 0; t < tries; t += 1) {

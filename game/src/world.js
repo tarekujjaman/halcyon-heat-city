@@ -1,7 +1,6 @@
-// The world: one THREE.Scene holding the city built from the seeded plan (ground, roads,
-// buildings, props, beach and sea), the static colliders every mover tests against, the shared
-// textures and sign atlas, the sky with its clock, and the per-frame update of what moves in the
-// scenery (water, ferris wheel, lamps by hour). Exports createWorld(seed).
+// The world: the scene with the city built from the seeded plan (ground, roads, buildings, props,
+// beach and sea), the static colliders, the sky and clock, and the per-frame update of what moves
+// in the scenery (water, ferris wheel, lights by time of day).
 import * as THREE from 'three';
 import { buildLayout } from './city/layout.js';
 import { buildGround } from './city/ground.js';
@@ -14,11 +13,6 @@ import { StaticColliders } from './collision.js';
 import { createTextureSet } from './textures.js';
 import { createSky } from './sky.js';
 
-/**
- * Build Halcyon Bay for `seed`. Returns `{scene, textures, layout, colliders, signs, sky, props,
- * beach, buildings, time, update(dt, focus, cameraPos)}`; `time` is the seconds of world simulation
- * so far (the clock the scenery animates to), read-only.
- */
 export function createWorld(seed) {
   const scene = new THREE.Scene();
   const textures = createTextureSet();
@@ -44,10 +38,7 @@ export function createWorld(seed) {
     get time() {
       return time;
     },
-    /**
-     * Advance the scenery by dt: the sky and its lamps (`focus` is the player's position, which the
-     * shadow camera follows), then the water and wheel, lit to match the sky.
-     */
+    /** Scenery animation and lighting for the frame; `focus` is the player's position. */
     update(dt, focus, cameraPos) {
       time += dt;
       sky.update(dt, focus);
