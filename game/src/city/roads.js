@@ -1,12 +1,29 @@
-// Roads: every segment with lane markings, the intersections with crosswalks and stop lines, the
-// Pelican Causeway over the harbour mouth and the dock quay. One merged mesh per surface type.
+// The road network as geometry: every street segment with its lane texture, the intersection
+// boxes with crosswalks and stop lines, the Pelican Causeway over the harbour mouth, Pelican Key's
+// turning loop, the dock quay, and the invisible sea and edge walls nobody drives off. One merged
+// mesh per surface. Exports buildRoads(layout, textures, colliders) -> THREE.Group.
 import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { MeshBatch } from './batch.js';
 
 const PAINT = '#efe9da';
-const KERB = 0.14;
+/** Paint sits a hair above the asphalt (the material also uses a polygon offset). */
+const PAINT_Y = 0.012;
+/** Metres of road per repeat of the lane texture (one dash cycle). */
+const LANE_TILE = 12;
+/** Stop lines: a bar this wide, this far before the crosswalk, across the approach lanes. */
+const STOP_LINE_WIDTH = 0.5;
+const STOP_LINE_SETBACK = 3.6;
+/** Crosswalks: zebra stripes this far from the segment end, this many across the carriageway. */
+const CROSSWALK_INSET = 1.5;
+const CROSSWALK_DEPTH = 3;
+const CROSSWALK_STRIPES = 9;
+const CROSSWALK_STRIPE_WIDTH = 0.6;
 
+/**
+ * Build every road surface and the kerbside colliders of the plan. The returned group is static;
+ * colliders are added in place (railings, bollards, quay edge, the sea and the city edges).
+ */
 export function buildRoads(layout, textures, colliders) {
   const group = new THREE.Group();
   const roadBatch = new MeshBatch();
@@ -14,7 +31,6 @@ export function buildRoads(layout, textures, colliders) {
   const paintBatch = new MeshBatch();
   const concreteBatch = new MeshBatch();
   const half = CITY.road / 2;
-  const laneTile = 12;
 
   for (const road of layout.roads) {
     if (road.axis === 'x') {
@@ -23,22 +39,22 @@ export function buildRoads(layout, textures, colliders) {
       const z = road.z;
       const len = x2 - x1;
       // u across (0..1 = kerb to kerb), v along: eastbound traffic keeps the dashes aligned.
-      roadBatch.quad([x1, 0, z + half], [x2, 0, z + half], [x2, 0, z - half], [x1, 0, z - half], [0, 1, 0], [[1, 0], [1, len / laneTile], [0, len / laneTile], [0, 0]], '#ffffff');
-      addCrosswalk(paintBatch, x1 + 1.5, z, 'x');
-      addCrosswalk(paintBatch, x2 - 1.5, z, 'x');
+      roadBatch.quad([x1, 0, z + half], [x2, 0, z + half], [x2, 0, z - half], [x1, 0, z - half], [0, 1, 0], [[1, 0], [1, len / LANE_TILE], [0, len / LANE_TILE], [0, 0]], '#ffffff');
+      addCrosswalk(paintBatch, x1 + CROSSWALK_INSET, z, 'x');
+      addCrosswalk(paintBatch, x2 - CROSSWALK_INSET, z, 'x');
       // Stop lines on the right-hand approach lanes of each end.
-      paintBatch.floor(x2 - 3.6, z, 0.5, half, 0.012, PAINT);
-      paintBatch.floor(x1 + 3.1, z - half, 0.5, half, 0.012, PAINT);
+      paintBatch.floor(x2 - STOP_LINE_SETBACK, z, STOP_LINE_WIDTH, half, PAINT_Y, PAINT);
+      paintBatch.floor(x1 + STOP_LINE_SETBACK - STOP_LINE_WIDTH, z - half, STOP_LINE_WIDTH, half, PAINT_Y, PAINT);
     } else {
       const z1 = road.z1 + half;
       const z2 = road.z2 - half;
       const x = road.x;
       const len = z2 - z1;
-      roadBatch.quad([x - half, 0, z1], [x - half, 0, z2], [x + half, 0, z2], [x + half, 0, z1], [0, 1, 0], [[1, 0], [1, len / laneTile], [0, len / laneTile], [0, 0]], '#ffffff');
-      addCrosswalk(paintBatch, x, z1 + 1.5, 'z');
-      addCrosswalk(paintBatch, x, z2 - 1.5, 'z');
-      paintBatch.floor(x - half, z2 - 3.6, half, 0.5, 0.012, PAINT);
-      paintBatch.floor(x, z1 + 3.1, half, 0.5, 0.012, PAINT);
+      roadBatch.quad([x - half, 0, z1], [x - half, 0, z2], [x + half, 0, z2], [x + half, 0, z1], [0, 1, 0], [[1, 0], [1, len / LANE_TILE], [0, len / LANE_TILE], [0, 0]], '#ffffff');
+      addCrosswalk(paintBatch, x, z1 + CROSSWALK_INSET, 'z');
+      addCrosswalk(paintBatch, x, z2 - CROSSWALK_INSET, 'z');
+      paintBatch.floor(x - half, z2 - STOP_LINE_SETBACK, half, STOP_LINE_WIDTH, PAINT_Y, PAINT);
+      paintBatch.floor(x, z1 + STOP_LINE_SETBACK - STOP_LINE_WIDTH, half, STOP_LINE_WIDTH, PAINT_Y, PAINT);
     }
   }
   for (const n of layout.intersections) {
@@ -50,7 +66,7 @@ export function buildRoads(layout, textures, colliders) {
   const cx1 = layout.causewayX1 - half;
   const cx2 = layout.causewayX2;
   const len = cx1 - cx2;
-  roadBatch.quad([cx2, 0, cz + half], [cx1, 0, cz + half], [cx1, 0, cz - half], [cx2, 0, cz - half], [0, 1, 0], [[1, 0], [1, len / laneTile], [0, len / laneTile], [0, 0]], '#ffffff');
+  roadBatch.quad([cx2, 0, cz + half], [cx1, 0, cz + half], [cx1, 0, cz - half], [cx2, 0, cz - half], [0, 1, 0], [[1, 0], [1, len / LANE_TILE], [0, len / LANE_TILE], [0, 0]], '#ffffff');
   concreteBatch.box(cx2 - 2, -1.6, cz - half - 1.6, len + 2, 1.6, CITY.road + 3.2, '#b9b5ad', [4, 4]);
   concreteBatch.box(cx2 - 2, 0, cz - half - 1.6, len + 2, 1.1, 0.5, '#d8d4cc');
   concreteBatch.box(cx2 - 2, 0, cz + half + 1.1, len + 2, 1.1, 0.5, '#d8d4cc');
@@ -100,7 +116,7 @@ export function buildRoads(layout, textures, colliders) {
   }
   colliders.addBox(q - 40, zTop - 40, q, layout.oceanZ - half - 2, 3, 'sea');
   colliders.addBox(q - 40, layout.oceanZ + half + 2, q, layout.shoreZ + 6, 3, 'sea');
-  colliders.addBox(layout.causewayX2 - 6, layout.oceanZ - half - 1.6, layout.causewayX2 - 2, layout.oceanZ + half + 1.6, 0, 'none');
+  // (The road onto Pelican Key stays open: the island's own rim wall has a gap where the causeway arrives.)
   // City outer edges north and east: hills and a highway shoulder nobody drives off.
   colliders.addBox(layout.quayX - 40, zTop - 44, CITY.x0 + CITY.width + 80, zTop - 40, 4, 'edge');
   colliders.addBox(CITY.x0 + CITY.width + 40, zTop - 44, CITY.x0 + CITY.width + 44, layout.shoreZ + 6, 4, 'edge');
@@ -116,17 +132,14 @@ export function buildRoads(layout, textures, colliders) {
   return group;
 }
 
-/** Zebra stripes across a road end: at (x, z), the road running along `axis`. */
+/** Zebra stripes across a road end centred on (x, z), the road running along `axis` ('x' or 'z'). */
 function addCrosswalk(batch, x, z, axis) {
   const half = CITY.road / 2;
-  const stripes = 9;
-  const stripeW = 0.6;
-  const gap = (CITY.road - 2) / stripes;
-  for (let k = 0; k < stripes; k += 1) {
-    const offset = -half + 1 + k * gap + (gap - stripeW) / 2;
-    if (axis === 'x') batch.floor(x - 1.5, z + offset, 3, stripeW, 0.012, PAINT);
-    else batch.floor(x + offset, z - 1.5, stripeW, 3, 0.012, PAINT);
+  const halfDepth = CROSSWALK_DEPTH / 2;
+  const pitch = (CITY.road - 2) / CROSSWALK_STRIPES;
+  for (let k = 0; k < CROSSWALK_STRIPES; k += 1) {
+    const offset = -half + 1 + k * pitch + (pitch - CROSSWALK_STRIPE_WIDTH) / 2;
+    if (axis === 'x') batch.floor(x - halfDepth, z + offset, CROSSWALK_DEPTH, CROSSWALK_STRIPE_WIDTH, PAINT_Y, PAINT);
+    else batch.floor(x + offset, z - halfDepth, CROSSWALK_STRIPE_WIDTH, CROSSWALK_DEPTH, PAINT_Y, PAINT);
   }
 }
-
-export { KERB };

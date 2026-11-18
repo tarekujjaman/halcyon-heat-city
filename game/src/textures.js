@@ -1,8 +1,12 @@
-// Every texture the game uses is painted here on a canvas at start-up: windows by building style
-// (with a matching lit-window emissive map for the night), road surfaces with lane markings,
-// pavement, sand, grass, boardwalk planks, corrugated steel, neon and shop signs. No image files.
+// Every texture the game uses is painted on a canvas at start-up, seeded so it is the same every
+// run: window grids by building style (with the lit-window emissive map for the night), the road
+// with its lane markings, asphalt, pavement, sand, grass, boardwalk planks, corrugated steel,
+// containers and the soft glow sprite for smoke and lights. No image files. Exports the painters
+// and createTextureSet(), the one shared set the world builders and the effects read from.
 import * as THREE from 'three';
 import { createRng } from './rng.js';
+
+const TILE = 256;
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -11,6 +15,7 @@ function canvas(w, h) {
   return c;
 }
 
+/** Wrap a canvas as a three.js texture: repeating and sRGB by default (the painters work in sRGB colours). */
 function toTexture(c, { repeat = true, srgb = true, anisotropy = 4 } = {}) {
   const t = new THREE.CanvasTexture(c);
   if (repeat) {
@@ -23,6 +28,10 @@ function toTexture(c, { repeat = true, srgb = true, anisotropy = 4 } = {}) {
   return t;
 }
 
+/**
+ * Seeded grain over the whole canvas: each pixel shifts by up to ±alpha/2 of full scale. With `dark`
+ * false the blue channel moves less, so sand and grass grain reads warm rather than grey.
+ */
 function noise(ctx, w, h, rng, alpha, dark = true) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
@@ -36,11 +45,12 @@ function noise(ctx, w, h, rng, alpha, dark = true) {
 }
 
 /**
- * A wall tile with a grid of windows. One tile is `cols` windows wide and `rows` floors tall; the
- * emissive map lights a seeded share of them for the night.
+ * A wall tile with a grid of windows. One tile is `cols` windows wide and `rows` floors tall; `winW`
+ * and `winH` are the window's share of its cell; `sill`, `balcony` and `mullions` add detail. The
+ * emissive map lights a seeded `litChance` share of the windows for the night. Returns {map, emissive}.
  */
-export function windowTexture({ cols = 2, rows = 1, wall = '#d9d6cf', frame = '#3b3f46', glass = '#5d7f9c', glassTop = '#9fc3dc', litChance = 0.45, seed = 7, winW = 0.55, winH = 0.6, sill = false, balcony = false, mullions = false }) {
-  const size = 256;
+export function windowTexture({ cols = 2, rows = 1, wall = '#d9d6cf', frame = '#3b3f46', glass = '#5d7f9c', glassTop = '#9fc3dc', litChance = 0.45, seed = 7, winW = 0.55, winH = 0.6, sill = false, balcony = false, mullions = false } = {}) {
+  const size = TILE;
   const rng = createRng(seed);
   const day = canvas(size, size);
   const night = canvas(size, size);
@@ -97,8 +107,9 @@ export function windowTexture({ cols = 2, rows = 1, wall = '#d9d6cf', frame = '#
   return { map: toTexture(day), emissive: toTexture(night) };
 }
 
+/** Corrugated steel for the warehouses: vertical ribs over the base colour. Returns {map, emissive: null}. */
 export function corrugatedTexture(color = '#8d8f93', seed = 3) {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = color;
@@ -113,6 +124,10 @@ export function corrugatedTexture(color = '#8d8f93', seed = 3) {
   return { map: toTexture(c), emissive: null };
 }
 
+/**
+ * One road tile, kerb to kerb across u: white edge lines, a double yellow centre line and a dash in
+ * each lane over the first 30 % of v, so a 12 m repeat gives one dash cycle.
+ */
 export function roadTexture() {
   const w = 512;
   const h = 512;
@@ -135,8 +150,9 @@ export function roadTexture() {
   return toTexture(c);
 }
 
+/** Plain asphalt for intersections and the island loop. */
 export function asphaltTexture() {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#3a3b40';
@@ -145,8 +161,9 @@ export function asphaltTexture() {
   return toTexture(c);
 }
 
+/** Pavement slabs: a 2 x 2 grid of joints per tile. */
 export function pavementTexture() {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#c8c3b8';
@@ -165,8 +182,9 @@ export function pavementTexture() {
   return toTexture(c);
 }
 
+/** Beach sand with warm grain. */
 export function sandTexture() {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#efd9a8';
@@ -175,8 +193,9 @@ export function sandTexture() {
   return toTexture(c);
 }
 
+/** Lawn and park grass. */
 export function grassTexture() {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#6fa64a';
@@ -185,8 +204,9 @@ export function grassTexture() {
   return toTexture(c);
 }
 
+/** Boardwalk and pier planks: eight boards per tile with a dark seam. */
 export function woodTexture() {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   const rng = createRng(16);
@@ -201,8 +221,9 @@ export function woodTexture() {
   return toTexture(c);
 }
 
+/** Concrete for lots, the causeway, the quay and plinths. */
 export function concreteTexture(color = '#9b9a95') {
-  const size = 256;
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = color;
@@ -211,48 +232,9 @@ export function concreteTexture(color = '#9b9a95') {
   return toTexture(c);
 }
 
-/** A sign plane texture: text on a background, used for shops, hotels and billboards. */
-export function signTexture(text, { bg = '#1b1b24', fg = '#ffffff', w = 512, h = 128, font = 'bold 72px Impact, "Arial Black", Arial, sans-serif', border = null } = {}) {
-  const c = canvas(w, h);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
-  if (border) {
-    ctx.strokeStyle = border;
-    ctx.lineWidth = 8;
-    ctx.strokeRect(6, 6, w - 12, h - 12);
-  }
-  ctx.fillStyle = fg;
-  ctx.font = font;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, w / 2, h / 2 + 4, w - 40);
-  return toTexture(c, { repeat: false });
-}
-
-/** A neon tube sign: glowing letters on near-black, the same canvas serving as the emissive map. */
-export function neonTexture(text, color = '#ff4fd8', { w = 512, h = 128 } = {}) {
-  const c = canvas(w, h);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0b0a12';
-  ctx.fillRect(0, 0, w, h);
-  ctx.font = 'bold 84px "Arial Black", Impact, Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 28;
-  ctx.fillStyle = color;
-  for (let i = 0; i < 3; i += 1) ctx.fillText(text, w / 2, h / 2 + 4, w - 40);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 80px "Arial Black", Impact, Arial, sans-serif';
-  ctx.globalAlpha = 0.85;
-  ctx.fillText(text, w / 2, h / 2 + 4, w - 44);
-  return toTexture(c, { repeat: false });
-}
-
-export function containerTexture(color, seed = 5) {
-  const size = 256;
+/** Shipping-container steel: wider ribs than the warehouse walls, tinted per container by vertex colour. */
+export function containerTexture(color = '#ffffff', seed = 5) {
+  const size = TILE;
   const c = canvas(size, size);
   const ctx = c.getContext('2d');
   ctx.fillStyle = color;
@@ -267,7 +249,7 @@ export function containerTexture(color, seed = 5) {
   return toTexture(c);
 }
 
-/** A soft round sprite for smoke, glows and the sun. */
+/** A soft round sprite (solid to 40 % of the radius, then fading) for smoke, glows, lamps and the sun. */
 export function glowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)') {
   const size = 128;
   const c = canvas(size, size);
@@ -281,7 +263,10 @@ export function glowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255
   return toTexture(c, { repeat: false });
 }
 
-/** Everything built once and shared. */
+/**
+ * Every texture, painted once at start-up and shared by the city builders and the effects. The
+ * building styles are {map, emissive} pairs; the surfaces are single textures.
+ */
 export function createTextureSet() {
   return {
     facade: windowTexture({ cols: 2, rows: 1, wall: '#d9d6cf', seed: 21, sill: true }),
