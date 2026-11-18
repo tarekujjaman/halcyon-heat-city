@@ -1,15 +1,27 @@
-// An AI driver for any vehicle: follows lane points through intersections with pure-pursuit
-// steering, keeps its lane, stops at red lights and behind obstacles, waits until the exit is clear,
-// and can chase a target directly. Traffic, police and mission cars all drive with this.
-import { OPPOSITE, yawOfDir } from '../navigation.js';
+// The AI driver every traffic, police, racer and mission car shares: follows lane points through
+// the intersections with pure-pursuit steering, keeps its lane, stops at red lights and behind
+// obstacles, waits until the box beyond is clear, honks and backs out when boxed in, routes by
+// road to a destination, and can chase a moving target directly. Exports createDriver(v, nav, options).
+import { DRIVER_AI, TRAFFIC } from '../config.js';
 import { frand } from '../rng.js';
 
+/** A bend sharper than this (radians to the next path point) is taken at TRAFFIC.turnSpeed. */
+const TURN_SLOW_ANGLE = 0.25;
+/** The exit of the intersection ahead is checked for a jam from this close. */
+const EXIT_CHECK_DISTANCE = 14;
+
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+/**
+ * A driver for vehicle `v` on the road graph `nav`; options: `limit` (cruising m/s), `ignoreLights`.
+ * Place the car, then reset() (traffic knows its lane) or setRoad(); step() then writes v.ctrl each step.
+ */
 export function createDriver(v, nav, options = {}) {
   const ai = {
-    node: null, dir: 'n', lane: 0, path: [], beforeStop: false, stopNode: null, stopDir: null,
-    limit: options.limit || 12, ignoreLights: !!options.ignoreLights, aggressive: !!options.aggressive,
-    waiting: 0, stuck: 0, mode: 'road', target: null, lastProgress: 0, reverseTimer: 0, honk: 0,
-    turnBias: options.turnBias || null, onArrive: null, destination: null, routeDirs: null,
+    node: null, dir: 'n', lane: 0, path: [], beforeStop: false, stopNode: null, stopDir: null, nextDir: null, pendingStop: null,
+    limit: options.limit || DRIVER_AI.defaultLimit, ignoreLights: !!options.ignoreLights,
+    waiting: 0, stuck: 0, mode: 'road', target: null, reverseTimer: 0, honk: 0, sidestep: 0,
+    destination: null, routeDirs: null,
   };
 
   /** Put the driver on the approach to `node` heading `dir` on lane `lane` (the car is placed by the caller). */
@@ -21,11 +33,12 @@ export function createDriver(v, nav, options = {}) {
     ai.beforeStop = true;
     ai.stopNode = node;
     ai.stopDir = dir;
+    ai.pendingStop = null;
     ai.routeDirs = null;
     ai.nextDir = chooseNext();
   };
 
-  /** Decide which way to leave the node ahead: routed, else mostly straight, else a random turn. */
+  /** Decide which way to leave the node ahead: the route's next turn, else mostly straight, else a random turn. */
   function chooseNext() {
     const n = ai.node;
     let next = null;
@@ -33,14 +46,14 @@ export function createDriver(v, nav, options = {}) {
     if (!next || !nav.neighbor(n, next)) {
       const options = nav.turnOptions(n, ai.dir);
       const straight = options.includes(ai.dir) ? ai.dir : null;
-      if (straight && frand() < 0.58) next = straight;
+      if (straight && frand() < DRIVER_AI.straightBias) next = straight;
       else next = options[Math.floor(frand() * options.length)];
     }
     if (n.key) next = 'e';
     return next;
   }
 
-  /** Plan through the current node with the chosen direction and extend the path. */
+  /** Plan through the current node with the chosen direction: the exit point, then the next node's stop point. */
   ai.planNext = () => {
     const n = ai.node;
     const next = ai.nextDir || chooseNext();
@@ -56,19 +69,15 @@ export function createDriver(v, nav, options = {}) {
     ai.pendingStop = after ? { node: after, dir: next } : null;
   };
 
-  /** Route toward a world position by road; the driver then continues at random. */
+  /** Route toward a world position by road (nearest node); once there the driver wanders again. */
   ai.routeTo = (x, z) => {
-    const target = nav.nearestNode(x, z);
     if (!ai.node) return;
-    const dirs = nav.route(ai.node, target);
+    const dirs = nav.route(ai.node, nav.nearestNode(x, z));
     ai.routeDirs = dirs && dirs.length ? dirs : null;
     ai.destination = { x, z };
   };
 
-  /**
-   * Drive one step. `ctx` supplies: lightState(node, dir) -> 'green'|'yellow'|'red', obstacleGap(v, lookahead)
-   * -> metres to the nearest thing ahead (Infinity), exitClear(point) -> bool, and dt.
-   */
+  /** One step. `ctx` (traffic.ctx): lightState(node, dir), obstacleGap(v, lookahead, chasing) -> metres or Infinity, exitClear(node, dir, lane). */
   ai.step = (dt, ctx) => {
     if (v.wrecked) {
       v.ctrl.throttle = 0;
@@ -79,6 +88,7 @@ export function createDriver(v, nav, options = {}) {
       chaseStep(dt, ctx);
       return;
     }
+    if (!ai.node) ai.setRoad();
     if (ai.path.length === 0) ai.planNext();
     let target = ai.path[0];
     const fx = Math.sin(v.yaw);
@@ -90,7 +100,7 @@ export function createDriver(v, nav, options = {}) {
     let dist = Math.hypot(dx, dz);
     const along = dx * fx + dz * fz;
     // Reached (or passed) the point: advance.
-    if (dist < 2.6 || (along < -1 && dist < 7)) {
+    if (dist < DRIVER_AI.reachDistance || (along < -1 && dist < DRIVER_AI.passedDistance)) {
       ai.path.shift();
       if (ai.beforeStop) {
         ai.beforeStop = false;
@@ -111,15 +121,15 @@ export function createDriver(v, nav, options = {}) {
     // Pure pursuit toward a point a little ahead on the path for smoother turns.
     let aimX = target.x;
     let aimZ = target.z;
-    if (ai.path.length > 1 && dist < 7) {
-      const t = 1 - dist / 7;
+    if (ai.path.length > 1 && dist < DRIVER_AI.pursuitBlend) {
+      const t = 1 - dist / DRIVER_AI.pursuitBlend;
       aimX = target.x + (ai.path[1].x - target.x) * t * 0.5;
       aimZ = target.z + (ai.path[1].z - target.z) * t * 0.5;
     }
     const lx = (aimX - v.x) * rx + (aimZ - v.z) * rz;
     const lz = (aimX - v.x) * fx + (aimZ - v.z) * fz;
     const angle = Math.atan2(lx, Math.max(0.5, lz));
-    v.ctrl.steer = Math.max(-1, Math.min(1, angle * 2.6));
+    v.ctrl.steer = clamp(angle * DRIVER_AI.steerGain, -1, 1);
 
     // Desired speed: the limit, lower in turns, to zero at a red light or behind an obstacle.
     let want = ai.limit;
@@ -127,13 +137,13 @@ export function createDriver(v, nav, options = {}) {
     if (turning) {
       const nextYaw = Math.atan2(ai.path[0].x - v.x, ai.path[0].z - v.z);
       const turnAmount = Math.abs(Math.atan2(Math.sin(nextYaw - v.yaw), Math.cos(nextYaw - v.yaw)));
-      if (turnAmount > 0.25) want = Math.min(want, 6.5);
+      if (turnAmount > TURN_SLOW_ANGLE) want = Math.min(want, TRAFFIC.turnSpeed);
     }
     if (ai.beforeStop && ai.stopNode) {
       const light = ai.ignoreLights ? 'green' : ctx.lightState(ai.stopNode, ai.stopDir);
       const toStop = Math.hypot(target.x - v.x, target.z - v.z);
       const mustStop = light === 'red' || (light === 'yellow' && toStop > 6);
-      const exitBlocked = toStop < 14 && !ctx.exitClear(ai.stopNode, ai.nextDir || ai.stopDir, ai.lane);
+      const exitBlocked = toStop < EXIT_CHECK_DISTANCE && !ctx.exitClear(ai.stopNode, ai.nextDir || ai.stopDir, ai.lane);
       if (mustStop || exitBlocked) {
         want = Math.min(want, Math.max(0, (toStop - 2.5) * 1.3));
         if (toStop < 3.2) want = 0;
@@ -144,15 +154,15 @@ export function createDriver(v, nav, options = {}) {
     if (gap < Infinity) {
       want = Math.min(want, Math.max(0, (gap - 2.5) * 1.5));
       if (Math.abs(v.speed) < 0.5) ai.stuck += dt;
-      if (ai.stuck > 2.5 && ai.honk <= 0) {
+      if (ai.stuck > DRIVER_AI.honkAfter && ai.honk <= 0) {
         ai.honk = 4 + frand() * 4;
         v.horn = 0.4;
       }
     } else if (Math.abs(v.speed) > 0.5) ai.stuck = 0;
     // Boxed in for too long: back up a little and try again around the obstacle.
     ai.reverseTimer = Math.max(0, ai.reverseTimer - dt);
-    if (ai.stuck > 9 && ai.reverseTimer <= 0 && !ai.beforeStop) {
-      ai.reverseTimer = 1.4;
+    if (ai.stuck > DRIVER_AI.reverseAfter && ai.reverseTimer <= 0 && !ai.beforeStop) {
+      ai.reverseTimer = DRIVER_AI.reverseSeconds;
       ai.stuck = 0;
       ai.sidestep = frand() < 0.5 ? -1 : 1;
     }
@@ -163,18 +173,19 @@ export function createDriver(v, nav, options = {}) {
       v.ctrl.handbrake = false;
       return;
     }
-    if (ai.stuck > 9 && ai.beforeStop) {
+    if (ai.stuck > DRIVER_AI.reverseAfter && ai.beforeStop) {
       // Waiting at the box with something dead ahead: creep around it.
       v.ctrl.steer = (ai.sidestep || 1) * 0.6;
       want = Math.max(want, 2.5);
-      if (ai.stuck > 16) ai.stuck = 0;
+      if (ai.stuck > DRIVER_AI.creepReset) ai.stuck = 0;
     }
     ai.honk = Math.max(0, ai.honk - dt);
     if (v.horn > 0) v.horn = Math.max(0, v.horn - dt);
-    speedControl(want, dt);
+    speedControl(want);
   };
 
-  function speedControl(want, dt) {
+  /** Throttle and brake toward a wanted speed (m/s); a wanted zero holds the brake once stopped. */
+  function speedControl(want) {
     const s = v.speed;
     if (s < want - 0.3) {
       v.ctrl.throttle = Math.min(1, (want - s) / 4);
@@ -195,8 +206,8 @@ export function createDriver(v, nav, options = {}) {
   /** Chase: steer at the target's predicted position, full throttle, reversing out when stuck. */
   function chaseStep(dt, ctx) {
     const t = ai.target;
-    const tx = t.x + (t.vx || 0) * 0.5;
-    const tz = t.z + (t.vz || 0) * 0.5;
+    const tx = t.x + (t.vx || 0) * DRIVER_AI.chasePredict;
+    const tz = t.z + (t.vz || 0) * DRIVER_AI.chasePredict;
     const fx = Math.sin(v.yaw);
     const fz = Math.cos(v.yaw);
     const rx = -Math.cos(v.yaw);
@@ -207,8 +218,8 @@ export function createDriver(v, nav, options = {}) {
     ai.reverseTimer = Math.max(0, ai.reverseTimer - dt);
     if (Math.abs(v.speed) < 1 && dist > 4) ai.stuck += dt;
     else ai.stuck = 0;
-    if (ai.stuck > 1.6 && ai.reverseTimer <= 0) {
-      ai.reverseTimer = 1.4;
+    if (ai.stuck > DRIVER_AI.chaseStuckAfter && ai.reverseTimer <= 0) {
+      ai.reverseTimer = DRIVER_AI.reverseSeconds;
       ai.stuck = 0;
     }
     if (ai.reverseTimer > 0) {
@@ -219,7 +230,7 @@ export function createDriver(v, nav, options = {}) {
       return;
     }
     const angle = Math.atan2(lx, lz);
-    v.ctrl.steer = Math.max(-1, Math.min(1, angle * 2.2));
+    v.ctrl.steer = clamp(angle * DRIVER_AI.chaseSteerGain, -1, 1);
     const behind = lz < 0;
     let want = ai.limit;
     if (behind && dist < 25) want = 8;
@@ -227,27 +238,27 @@ export function createDriver(v, nav, options = {}) {
     if (Math.abs(angle) > 1.2) want = Math.min(want, 7);
     const gap = ctx.obstacleGap(v, 5 + Math.abs(v.speed), true);
     if (gap < Infinity && gap < 3) want = Math.min(want, 2);
-    speedControl(want, dt);
+    speedControl(want);
     v.ctrl.handbrake = Math.abs(angle) > 1.8 && Math.abs(v.speed) > 8;
   }
 
+  /** Chase `target` ({x, z, vx?, vz?, speed?}, read live each step), at `limit` m/s if given. */
   ai.setChase = (target, limit) => {
     ai.mode = 'chase';
     ai.target = target;
     if (limit) ai.limit = limit;
   };
+
+  /** Back to lane driving from wherever the car is: snap to the nearest lane heading its way, aiming at the node ahead. */
   ai.setRoad = () => {
     ai.mode = 'road';
     ai.target = null;
     const loc = nav.locate(v.x, v.z, v.yaw);
     const d = loc.dir;
-    // Snap to the nearest lane heading our way and re-plan toward the next node ahead.
     const n = loc.node;
     const nextNode = nav.neighbor(n, d);
     const ahead = nextNode && ((n.x - v.x) * Math.sin(v.yaw) + (n.z - v.z) * Math.cos(v.yaw)) < 0 ? nextNode : n;
     ai.reset(ahead, d, Math.round(frand()));
   };
-  ai.yawOfDir = yawOfDir;
-  ai.OPPOSITE = OPPOSITE;
   return ai;
 }

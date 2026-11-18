@@ -1,21 +1,35 @@
-// Pedestrians: people walking the sidewalk graph of the blocks nearest the player, crossing at the
-// corners, panicking and running from gunfire and crashes, knocked down by cars, drivers fleeing a
-// stolen car, and the fares that hail a taxi.
-import { PEDS, WANTED } from './config.js';
+// Pedestrians: people walking the sidewalk graph of the blocks around the player, crossing at the
+// corners, pausing to look about, panicking and running from gunfire and crashes, knocked down and
+// hurt by cars, the driver who flees a stolen car, and the fare who waits for a taxi. Everyone is
+// registered with combat.js as a target. Exports createPedestrians(G).
+import { DAMAGE, PEDS } from './config.js';
 import { createCharacter, civilianLook } from './characters.js';
 import { createRng, frand } from './rng.js';
 import { vehicleCircles } from './vehicles/physics.js';
 import { circleOverlap } from './collision.js';
 
+/** Scratch for the per-step collision pass: contact list, vehicle circles, the body being pushed, spawn candidates. */
 const hits = [];
 const circles = [];
+const body = { x: 0, z: 0 };
+const candidates = [];
+/** How fast a pedestrian turns to face the way they walk (per second). */
+const TURN_RATE = 10;
+/** Knocked-down pedestrians slide with this drag and get up below this speed. */
+const KNOCK_DRAG = 4;
+const KNOCK_REST_SPEED = 0.5;
 
+/**
+ * The pedestrian system: `list` of people (`{kind: 'ped', x, z, y, yaw, hp, dead, state, ...}`),
+ * update(dt), alarm(), the spawners missions and the taxi use, and clear() for a new game.
+ */
 export function createPedestrians(G) {
   const rng = createRng(G.seed + 909);
   const list = [];
   const graph = G.world.layout.walk;
   let spawnTimer = 0;
 
+  /** A pedestrian standing at (x, z); `look` picks the character's clothes and skin. */
   function makePed(x, z, look = civilianLook(rng)) {
     const model = createCharacter(look);
     G.world.scene.add(model.group);
@@ -28,7 +42,7 @@ export function createPedestrians(G) {
         if (ped.dead) return;
         ped.hp -= dmg;
         ped.hitTimer = 0.25;
-        if (ped.hp <= 0) kill(ped, source);
+        if (ped.hp <= 0) kill(ped);
         else startPanic(ped, source && source.x !== undefined ? source : { x: ped.x, z: ped.z });
       },
     };
@@ -36,7 +50,7 @@ export function createPedestrians(G) {
     return ped;
   }
 
-  function kill(ped, source) {
+  function kill(ped) {
     ped.dead = true;
     ped.deadTimer = 0;
     ped.model.animateDead(frand() < 0.5 ? 1 : -1);
@@ -44,15 +58,16 @@ export function createPedestrians(G) {
     alarm(ped.x, ped.z, 25, ped);
   }
 
+  /** Run from `from` ({x, z}) for a few seconds, then walk on from the nearest corner. */
   function startPanic(ped, from) {
     if (ped.dead) return;
     ped.state = 'panic';
-    ped.panicTimer = 5 + frand() * 5;
+    ped.panicTimer = PEDS.panicSeconds * (1 + frand());
     ped.panicFrom = { x: from.x, z: from.z };
     ped.waitTimer = 0;
   }
 
-  /** Everyone within `radius` of a danger runs from it. */
+  /** Everyone alive within `radius` of a danger at (x, z) runs from it (`except` the one who caused it). */
   function alarm(x, z, radius, except = null) {
     for (const ped of list) {
       if (ped === except || ped.dead) continue;
@@ -61,6 +76,7 @@ export function createPedestrians(G) {
     }
   }
 
+  /** Index of the sidewalk node nearest (x, z). */
   function nearestNode(x, z) {
     let best = -1;
     let bestD = Infinity;
@@ -75,20 +91,23 @@ export function createPedestrians(G) {
     return best;
   }
 
+  /** Walk on to a random linked corner, not straight back the way we came unless it is a dead end. */
   function pickNext(ped) {
     const node = graph.nodes[ped.node];
+    if (!node || node.links.length === 0) return;
     const links = node.links.filter((l) => l !== ped.from);
     const pool = links.length ? links : node.links;
     ped.from = ped.node;
     ped.node = pool[Math.floor(frand() * pool.length)];
   }
 
+  /** A new pedestrian on a sidewalk corner out of close sight of (x, z), already walking; null if none fits. */
   function spawnNear(x, z) {
-    const candidates = [];
+    candidates.length = 0;
     for (let i = 0; i < graph.nodes.length; i += 1) {
       const n = graph.nodes[i];
       const d = Math.hypot(n.x - x, n.z - z);
-      if (d > 35 && d < PEDS.spawnRadius) candidates.push(i);
+      if (d > PEDS.spawnMinDistance && d < PEDS.spawnRadius) candidates.push(i);
     }
     if (!candidates.length) return null;
     const idx = candidates[Math.floor(frand() * candidates.length)];
@@ -100,6 +119,7 @@ export function createPedestrians(G) {
     return ped;
   }
 
+  /** Take a pedestrian out of the world (safe to call twice). */
   function removePed(ped) {
     ped.removed = true;
     G.world.scene.remove(ped.model.group);
@@ -107,6 +127,7 @@ export function createPedestrians(G) {
     if (i >= 0) list.splice(i, 1);
   }
 
+  /** Step toward (tx, tz) at `speed`, turning to face the way; returns the distance that was left. */
   function moveToward(ped, tx, tz, speed, dt) {
     const dx = tx - ped.x;
     const dz = tz - ped.z;
@@ -118,12 +139,14 @@ export function createPedestrians(G) {
     const want = Math.atan2(dx, dz);
     let diff = want - ped.yaw;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    ped.yaw += diff * Math.min(1, dt * 10);
+    ped.yaw += diff * Math.min(1, dt * TURN_RATE);
     return d;
   }
 
+  /** Keep the pedestrian out of walls, cars and the player; a car moving into them knocks them down. */
   function collide(ped) {
-    const body = { x: ped.x, z: ped.z };
+    body.x = ped.x;
+    body.z = ped.z;
     const res = G.world.colliders.resolveCircle(body, ped.radius, 0, hits);
     if (res.length) {
       ped.x = body.x;
@@ -140,8 +163,8 @@ export function createPedestrians(G) {
         ped.z += o.nz * o.depth;
         const vs = Math.hypot(v.vx, v.vz);
         const toward = -(v.vx * o.nx + v.vz * o.nz);
-        if (vs > 2.5 && toward > 1.5 && !ped.dead) {
-          const dmg = (vs - 2) * 9;
+        if (vs > DAMAGE.runOverSpeed && toward > 1.5 && !ped.dead) {
+          const dmg = (vs - 2) * PEDS.runOverDamage;
           ped.knocked = true;
           ped.vx = o.nx * vs * 0.9 + v.vx * 0.6;
           ped.vz = o.nz * vs * 0.9 + v.vz * 0.6;
@@ -166,6 +189,7 @@ export function createPedestrians(G) {
     }
   }
 
+  /** Spawn up to the crowd size, then move, animate and collide everyone; the dead lie for a while. */
   function update(dt) {
     const p = G.player;
     const px = p.x;
@@ -173,7 +197,7 @@ export function createPedestrians(G) {
     spawnTimer -= dt;
     if (list.length < PEDS.count && spawnTimer <= 0) {
       spawnNear(px, pz);
-      spawnTimer = 0.15;
+      spawnTimer = PEDS.spawnInterval;
     }
     for (let i = list.length - 1; i >= 0; i -= 1) {
       const ped = list[i];
@@ -184,7 +208,7 @@ export function createPedestrians(G) {
       }
       if (ped.dead) {
         ped.deadTimer += dt;
-        if (ped.deadTimer > 25 && dist > 40) removePed(ped);
+        if (ped.deadTimer > PEDS.corpseSeconds && dist > PEDS.corpseDistance) removePed(ped);
         ped.model.group.position.set(ped.x, ped.y, ped.z);
         continue;
       }
@@ -192,9 +216,9 @@ export function createPedestrians(G) {
       if (ped.knocked) {
         ped.x += ped.vx * dt;
         ped.z += ped.vz * dt;
-        ped.vx *= Math.exp(-dt * 4);
-        ped.vz *= Math.exp(-dt * 4);
-        if (Math.hypot(ped.vx, ped.vz) < 0.5) ped.knocked = false;
+        ped.vx *= Math.exp(-dt * KNOCK_DRAG);
+        ped.vz *= Math.exp(-dt * KNOCK_DRAG);
+        if (Math.hypot(ped.vx, ped.vz) < KNOCK_REST_SPEED) ped.knocked = false;
         ped.model.animateDead(1);
       } else if (ped.state === 'panic') {
         ped.panicTimer -= dt;
@@ -260,7 +284,7 @@ export function createPedestrians(G) {
         }
         const d = moveToward(ped, n.x + ox, n.z + oz, ped.speed, dt);
         if (d < 1.2) {
-          if (frand() < 0.06) {
+          if (frand() < PEDS.pauseChance) {
             ped.state = 'wait';
             ped.waitTimer = 1 + frand() * 3;
           }
@@ -271,13 +295,13 @@ export function createPedestrians(G) {
       }
       if (!ped.knocked) collide(ped);
       ped.y = G.world.layout.groundHeight(ped.x, ped.z);
-      ped.model.group.position.set(ped.x, ped.y + ped.model.group.position.y * 0, ped.z);
+      ped.model.group.position.set(ped.x, ped.y, ped.z);
       ped.model.group.rotation.y = ped.yaw;
       if (ped.hitTimer > 0) ped.model.parts.torso.rotation.x = -0.3;
     }
   }
 
-  /** The driver thrown out of a stolen car: appears at the door and runs. */
+  /** The driver thrown out of a stolen car: appears at the door and runs from the car. */
   function spawnFleeingDriver(v, look) {
     const rx = -Math.cos(v.yaw);
     const rz = Math.sin(v.yaw);
@@ -286,17 +310,17 @@ export function createPedestrians(G) {
     const z = v.z + rz * w;
     const ped = makePed(x, z, look || civilianLook(rng));
     ped.state = 'flee';
-    ped.panicTimer = 7;
+    ped.panicTimer = PEDS.fleeSeconds;
     ped.panicFrom = { x: v.x, z: v.z };
     return ped;
   }
 
-  /** A fare waiting on the pavement, waving: for the taxi activity. */
+  /** A fare waiting on the pavement, waving, who never wanders off: for the taxi activity. */
   function spawnFare(x, z) {
     const ped = makePed(x, z);
     ped.state = 'wait';
     ped.fare = true;
-    ped.waitTimer = 999;
+    ped.waitTimer = Infinity;
     ped.mission = true;
     return ped;
   }
@@ -309,6 +333,5 @@ export function createPedestrians(G) {
       for (const ped of [...list]) removePed(ped);
     },
     count: () => list.length,
-    radiusHint: WANTED.sightRange,
   };
 }
