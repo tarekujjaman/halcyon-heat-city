@@ -291,10 +291,10 @@ export function createVehicleModel(type, color) {
     const glowTex = ensureTextures().glow;
     const spriteR = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#ff2a2a', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     spriteR.position.set(-0.38, barY + 0.1, -0.55);
-    spriteR.scale.set(3.8, 2.7, 1);
+    spriteR.scale.set(5.2, 3.6, 1);
     const spriteB = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#2a6aff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     spriteB.position.set(0.38, barY + 0.1, -0.55);
-    spriteB.scale.set(3.8, 2.7, 1);
+    spriteB.scale.set(5.2, 3.6, 1);
     bodyGroup.add(spriteR, spriteB);
     lightbar = { red, blue, glowR, glowB, spriteR, spriteB, phase: 0 };
   }

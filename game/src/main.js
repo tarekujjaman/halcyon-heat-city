@@ -285,12 +285,47 @@ function arrest() {
   });
 }
 
+const stunt = { drift: 0, mult: 1, near: new WeakMap() };
+/**
+ * Driving stunts, paid through the HUD feed: a held slide (lateral slip over 3 m/s at speed) grows
+ * a DRIFT multiplier every 0.2 s; passing another car within about 2 m is a NEAR MISS.
+ */
+function updateStunts(h) {
+  const p = G.player;
+  const v = p.vehicle;
+  if (p.state !== 'car' || !v || v.wrecked) {
+    stunt.drift = 0;
+    stunt.mult = 1;
+    return;
+  }
+  if (Math.abs(v.slip || 0) > 3 && Math.abs(v.speed) > 8) {
+    stunt.drift += h;
+    const mult = Math.min(9, 1 + Math.floor(stunt.drift / 0.2));
+    if (mult > stunt.mult && mult >= 2) G.hud.stunt(`DRIFT x${mult}`, 100 * mult, 'drift', 'drift');
+    stunt.mult = mult;
+  } else {
+    stunt.drift = Math.max(0, stunt.drift - h * 2);
+    if (stunt.drift === 0) stunt.mult = 1;
+  }
+  if (Math.abs(v.speed) < 12) return;
+  for (const o of G.fleet.vehicles) {
+    if (o === v || o.wrecked) continue;
+    const d = Math.hypot(o.x - v.x, o.z - v.z);
+    // Centres within ~4.2 m side by side: about 2 m of air between the bodies.
+    if (d < 4.2 && d > 2.2 && !stunt.near.has(o)) {
+      stunt.near.set(o, true);
+      G.hud.stunt('NEAR MISS', 250, 'near');
+    } else if (d > 12 && stunt.near.has(o)) stunt.near.delete(o);
+  }
+}
+
 /** One simulation step of h seconds (edge-triggered keys only count on the first substep of a frame). */
 function step(h) {
   const p = G.player;
   p.update(h, G.input);
   G.weapons.update(h, G.input);
   G.fleet.update(h, G.world.time);
+  updateStunts(h);
   G.traffic.update(h);
   G.pedestrians.update(h);
   G.police.update(h);

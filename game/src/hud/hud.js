@@ -93,6 +93,7 @@ function gearFor(v, kmh) {
 const SLOT_IDS = ['fists', 'pistol', 'smg', 'shotgun', null];
 const CALLSIGNS = ['MARLIN', 'HERON', 'OSPREY', 'TARPON', 'PELICAN', 'KESTREL'];
 const POLICE_ROWS = 6;
+const STUNT_LIFE = 2.6;
 
 export function createHud(G) {
   const dom = {
@@ -108,7 +109,9 @@ export function createHud(G) {
     policeStatus: el('police-status'), policeRows: el('police-rows'), hotbar: el('hotbar'), repChip: el('rep-chip'), repName: el('rep-name'),
     repNext: el('rep-next'), repFill: el('rep-fill'), condFill: el('cond-fill'), gear: el('gear'), radioSong: el('radio-song'),
     radioArtist: el('radio-artist'), radioEq: el('radio-eq'), subPortrait: el('sub-portrait'), subRole: el('sub-role'),
+    districtName: el('district-name'), districtTag: el('district-tag'), stuntFeed: el('stunt-feed'),
   };
+  const stunts = [];
   const eqBars = Array.from(dom.radioEq.children);
   let portraitName = null;
   const starEls = [];
@@ -333,6 +336,26 @@ export function createHud(G) {
     flashWeapon() {
       state.weaponFlash = 1;
     },
+    /** A stunt callout ("DRIFT x3", "NEAR MISS") that pays `cash` through the economy; `key` reuses one live popup. */
+    stunt(text, cash, cls = '', key = null) {
+      let s = key ? stunts.find((x) => x.key === key && x.t < STUNT_LIFE - 0.8) : null;
+      if (!s) {
+        const n = document.createElement('div');
+        n.className = `stunt ${cls}`;
+        dom.stuntFeed.appendChild(n);
+        s = { el: n, t: 0, key, total: 0 };
+        stunts.push(s);
+        while (stunts.length > 4) stunts.shift().el.remove();
+      }
+      s.t = 0;
+      s.total += cash;
+      s.el.textContent = text;
+      const c = document.createElement('span');
+      c.className = 'cash';
+      c.textContent = `+$${s.total.toLocaleString()}`;
+      s.el.appendChild(c);
+      G.economy.addMoney(cash);
+    },
     hitMarker(kill) {
       state.hitTimer = 0.25;
       dom.hitmarker.classList.toggle('kill', !!kill);
@@ -465,7 +488,19 @@ export function createHud(G) {
         state.districtTimer = 4;
         dom.district.style.color = DISTRICTS[districtId] ? DISTRICTS[districtId].color : '#fff';
       }
-      dom.district.textContent = districtName;
+      dom.districtName.textContent = districtName;
+      dom.districtTag.textContent = DISTRICTS[districtId] ? DISTRICTS[districtId].tagline || '' : '';
+      // Stunt callouts float up and fade on the HUD clock.
+      for (let i = stunts.length - 1; i >= 0; i -= 1) {
+        const s = stunts[i];
+        s.t += dt;
+        s.el.style.transform = `translateY(${-s.t * 18}px)`;
+        s.el.style.opacity = String(Math.max(0, Math.min(1, (STUNT_LIFE - s.t) / 0.8)));
+        if (s.t >= STUNT_LIFE) {
+          s.el.remove();
+          stunts.splice(i, 1);
+        }
+      }
       state.districtTimer = Math.max(0, state.districtTimer - dt);
       dom.district.classList.toggle('big', state.districtTimer > 0);
       // Subtitles.

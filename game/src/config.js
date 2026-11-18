@@ -26,11 +26,11 @@ CITY.z0 = -CITY.height / 2;
 
 /** District ids, names and their map colours. */
 export const DISTRICTS = {
-  coral: { id: 'coral', name: 'Coral Strand', color: '#f6b36b', mapColor: '#f3c27e' },
-  glasswater: { id: 'glasswater', name: 'Glasswater Downtown', color: '#7fd3ff', mapColor: '#8ec9e8' },
-  neon: { id: 'neon', name: 'Neon Row', color: '#ff6ad5', mapColor: '#e98ad0' },
-  palmetto: { id: 'palmetto', name: 'Palmetto Heights', color: '#9be37a', mapColor: '#a9d98a' },
-  saltmarsh: { id: 'saltmarsh', name: 'Saltmarsh Docks', color: '#c9b48a', mapColor: '#c7b793' },
+  coral: { id: 'coral', name: 'Coral Strand', color: '#f6b36b', mapColor: '#f3c27e', tagline: 'sun, sand and fast cars on the strip' },
+  glasswater: { id: 'glasswater', name: 'Glasswater Downtown', color: '#7fd3ff', mapColor: '#8ec9e8', tagline: 'glass towers, bank vaults and dirty money' },
+  neon: { id: 'neon', name: 'Neon Row', color: '#ff6ad5', mapColor: '#e98ad0', tagline: 'pink lights, loud bars and Tide Runner turf' },
+  palmetto: { id: 'palmetto', name: 'Palmetto Heights', color: '#9be37a', mapColor: '#a9d98a', tagline: 'gated villas where old money hides' },
+  saltmarsh: { id: 'saltmarsh', name: 'Saltmarsh Docks', color: '#c9b48a', mapColor: '#c7b793', tagline: 'cranes, containers and no questions asked' },
 };
 
 export const PLAYER = {

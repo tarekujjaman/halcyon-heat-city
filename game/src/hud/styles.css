@@ -92,8 +92,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; fon
 .icon-shotgun::after { left: 26px; top: 11px; width: 9px; height: 8px; transform: skewX(-24deg); background: #c99a5b; }
 .icon-empty::before { left: 12px; top: 5px; width: 12px; height: 12px; border: 2px dashed rgba(255,255,255,0.6); background: transparent; box-shadow: none; }
 .icon-empty::after { display: none; }
-#district { margin-top: 6px; font-size: 18px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; transition: font-size 0.3s; }
-#district.big { font-size: 30px; }
+#district { margin-top: 6px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+#district-name { font-size: 18px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+#district-tag { display: none; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #fff; font-style: italic; text-transform: none; }
+#district.big { background: linear-gradient(270deg, rgba(8,12,28,0.85), rgba(8,12,28,0.55) 70%, rgba(8,12,28,0)); border-right: 5px solid currentColor; padding: 6px 12px 7px 40px; border-radius: 3px; }
+#district.big #district-name { font-size: 30px; font-weight: 900; letter-spacing: 3px; line-height: 1; text-shadow: 0 2px 0 #000, 0 0 14px currentColor; }
+#district.big #district-tag { display: block; margin-top: 3px; }
+#district.big #district-tag::before { content: ''; display: inline-block; width: 18px; height: 2px; background: currentColor; vertical-align: middle; margin-right: 6px; }
+/* Stunt feed: drift and near-miss callouts that float up and fade, just under the screen centre-right. */
+#stunt-feed { position: absolute; right: 24%; bottom: 44%; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 6px; pointer-events: none; }
+.stunt { font-size: 30px; font-weight: 900; font-style: italic; letter-spacing: 2px; color: #ffe14a; text-shadow: 0 3px 0 #7a2a00, 0 0 12px rgba(255,140,30,0.9), 2px 2px 0 #000; white-space: nowrap; }
+.stunt .cash { margin-left: 10px; font-size: 22px; color: #7dff8a; text-shadow: 0 2px 0 #0b3d12, 2px 2px 0 #000; }
+.stunt.near { color: #6fe6ff; text-shadow: 0 3px 0 #0a2a6a, 0 0 12px rgba(60,180,255,0.9), 2px 2px 0 #000; }
+.bar-label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 900; letter-spacing: 2px; color: #fff; margin-top: 4px; text-shadow: 1px 1px 0 #000; }
+.bar-icon { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 3px; font-size: 11px; color: #fff; text-shadow: none; }
+.bar-icon.hp { background: #e53935; }
+.bar-icon.ar { background: #1e88e5; }
+.bar-label + .bar { margin-top: 2px; }
 
 /* Bottom left: minimap + bars */
 #bottom-left { position: absolute; left: 22px; bottom: 20px; }

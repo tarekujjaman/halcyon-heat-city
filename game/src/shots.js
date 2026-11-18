@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { KEYS } from './input.js';
 import { seedShared } from './rng.js';
+import { glowTexture } from './textures.js';
 
 function drive(G, seconds, keys, stepSize = 1 / 60) {
   for (const k of keys) G.input.pressKey(k);
@@ -62,9 +63,15 @@ export async function stageShot(name, G) {
     const x0 = layout.roadX(4) + 48 + (Number.isFinite(shiftParam) ? shiftParam : 0);
     const coupe = G.fleet.spawn('coupe', x0, z, -Math.PI / 2, { color: '#c81e2e', role: 'player', owner: 'player' });
     G.player.enterVehicle(coupe);
-    G.economy.money = 4350;
+    // Mid-game: Day 2, five story missions done, Boss rank 60% of the way to Legend, three guns.
+    G.missions.restore({ completed: ['welcome', 'clock', 'neon', 'tail', 'docks'] });
+    G.world.sky.state.day = 2;
+    G.economy.money = 47250;
+    G.economy.rep = 512;
     G.player.health = 82;
     G.player.armor = 45;
+    G.weapons.give('pistol', 64);
+    G.weapons.give('shotgun', 18);
     G.weapons.give('smg', 120);
     G.weapons.select('smg');
     G.radio.setStation(0, true);
@@ -74,6 +81,8 @@ export async function stageShot(name, G) {
     G.traffic.spawnCar({ x: x0 + 34, z: layout.oceanZ + 1.75, yaw: Math.PI / 2, node: G.nav.node(6, 9), dir: 'e', lane: 0 }, 'sedan');
     G.traffic.spawnCar({ x: x0 + 52, z: layout.oceanZ + 5.25, yaw: Math.PI / 2, node: G.nav.node(6, 9), dir: 'e', lane: 1 }, 'pickup');
     G.traffic.spawnCar({ x: x0 + 48, z: layout.oceanZ - 5.25, yaw: -Math.PI / 2, node: G.nav.node(5, 9), dir: 'w', lane: 1 }, 'van');
+    // An oncoming taxi in the near eastbound lane: the coupe threads past it (the NEAR MISS).
+    G.traffic.spawnCar({ x: x0 - 30, z: layout.oceanZ + 1.75, yaw: Math.PI / 2, node: G.nav.node(5, 9), dir: 'e', lane: 0 }, 'taxi');
     const from = { x: x0 - 20, z };
     crowd(G, [
       [x0 - 15, layout.oceanZ - 9, false], [x0 - 19, layout.oceanZ - 8.4, false], [x0 - 9, layout.oceanZ - 9.6, true], [x0 + 2, layout.oceanZ - 8.8, false], [x0 + 10, layout.oceanZ - 9.2, true], [x0 + 22, layout.oceanZ - 9.4, false],
@@ -109,7 +118,7 @@ export async function stageShot(name, G) {
     // a tight lens that keeps the nearest palm crowns out of the corners; the helicopter hangs
     // low over the road behind the cruisers, in the clear sky under the objective, nose to us.
     // (?cam=dx,dy,dz,lx,ly,lz,fov,hx,hz,hy and ?shift=metres override these for composition reviews.)
-    const cam = [-8.5, 5.2, 2, 12, 0.6, 1, 46, 26.5, 0.3, 5.9];
+    const cam = [-19, 8.2, 2.4, 12, -2.2, 1, 48, 26.5, 0.3, 7.4];
     const camParam = new URLSearchParams(window.location.search).get('cam');
     if (camParam) camParam.split(',').forEach((n, i) => { if (Number.isFinite(Number.parseFloat(n))) cam[i] = Number.parseFloat(n); });
     G.police.summonHeli(v.x + cam[7], v.z + cam[8]);
@@ -124,15 +133,37 @@ export async function stageShot(name, G) {
     // A roadblock entry for the panel, forming just past the next corner, out of frame.
     const block = { x: v.x - 23, z: v.z, cruisers: [], officers: [] };
     G.police.roadblocks.push(block);
-    // Mission state for the panel: Saltmarsh Standoff at its "lose the police" stage, on the clock.
-    const docks = G.missions.defs.find((d) => d.id === 'docks');
-    const stage = docks.stages.findIndex((s) => s.objective === 'Lose the police');
-    G.missions.current = { def: docks, ctx: { G, def: docks, data: {} }, stage, time: 0 };
+    // Mission state for the panel: The Glasswater Job (mission 6) at its getaway stage, on the clock.
+    const bank = G.missions.defs.find((d) => d.id === 'bank');
+    const stage = bank.stages.findIndex((s) => typeof s.objective === 'string' && s.objective.includes('lose the heat'));
+    G.missions.current = { def: bank, ctx: { G, def: bank, data: {} }, stage, time: 0 };
     G.hud.setTimer(87);
-    // Warm sunset haze and a hotter grade for the cover.
-    G.world.scene.fog.near = 70;
-    G.world.scene.fog.far = 520;
-    G.renderer.toneMappingExposure = 1.12;
+    // Golden-hour grade: brighter exposure, warmer sun and sky fill, an orange haze on the horizon.
+    G.world.scene.fog.near = 60;
+    G.world.scene.fog.far = 480;
+    G.world.scene.fog.color.set('#ffa461');
+    G.renderer.toneMappingExposure = 1.24;
+    G.world.sky.sun.color.set('#ffb468');
+    G.world.sky.sun.intensity *= 1.15;
+    G.world.scene.traverse((o) => {
+      if (o.isHemisphereLight) { o.color.set('#ffc890'); o.groundColor.set('#d0885a'); }
+    });
+    // Cheap bloom: additive halos on the sun and on the street lamps near the chase.
+    const halo = (color, opacity) => new THREE.SpriteMaterial({ map: glowTexture(), color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const sunGlow = new THREE.Sprite(halo('#ffb060', 0.85));
+    sunGlow.material.depthTest = false;
+    sunGlow.renderOrder = -8;
+    sunGlow.position.copy(G.world.sky.state.sunDir).multiplyScalar(420).add(new THREE.Vector3(camPos.x, camPos.y, camPos.z));
+    sunGlow.scale.set(420, 420, 1);
+    G.world.scene.add(sunGlow);
+    const lampMat = halo('#ffc870', 0.75);
+    for (const l of G.world.props.lamps) {
+      if (Math.hypot(l.x - v.x, l.z - v.z) > 160) continue;
+      const s = new THREE.Sprite(lampMat);
+      s.position.set(l.x, 6.6, l.z);
+      s.scale.set(3.6, 3.6, 1);
+      G.world.scene.add(s);
+    }
     finish();
     G.hud.say('Dani', "Teo's garage, two blocks. Don't lift now, Sol, they're right on you!", 8, '#ffd43b');
     G.hud.update(0.016);
