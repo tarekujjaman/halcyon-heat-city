@@ -1,14 +1,20 @@
-// The in-game HUD: health and armor bars, wanted stars, money, weapon and ammo, the objective
-// line with its timer, the speedometer in a car, the radio station card, the clock and district,
-// subtitles with speaker names, notifications, the controls help for the first minutes, the hit
-// marker, the damage flash, the pointer-capture prompt and the crosshair.
-import { WEAPONS } from '../config.js';
+// The in-game HUD: health and armor bars, the respect rank bar, wanted stars, money, the weapon
+// hotbar, the mission panel (mission chip, objective, timer, stage progress, next step), the police
+// response panel with callsigned units while wanted, the speedometer in a car, the radio station
+// card, the day clock and district, subtitles with speaker names, notifications, the controls help
+// for the first minutes, the hit marker, the damage flash, the pointer-capture prompt and the crosshair.
+import { ECONOMY, WEAPONS } from '../config.js';
 import { speedKmh } from '../vehicles/physics.js';
 import { DISTRICTS } from '../city/layout.js';
 
 function el(id) {
   return document.getElementById(id);
 }
+
+/** Hotbar slots 1-5: the four real weapons, the fifth stays empty. */
+const SLOT_IDS = ['fists', 'pistol', 'smg', 'shotgun', null];
+const CALLSIGNS = ['MARLIN', 'HERON', 'OSPREY', 'TARPON', 'PELICAN', 'KESTREL'];
+const POLICE_ROWS = 5;
 
 export function createHud(G) {
   const dom = {
@@ -19,6 +25,10 @@ export function createHud(G) {
     notifications: el('notifications'), prompt: el('pointer-prompt'), crosshair: el('crosshair'), flash: el('damage-flash'),
     help: el('controls-help'), hitmarker: el('hitmarker'), banner: el('banner'), bannerTitle: el('banner-title'), bannerSub: el('banner-sub'),
     waypointInfo: el('waypoint-info'), hint: el('hint'), arrest: el('arrest-bar'), arrestFill: el('arrest-fill'), moneyDelta: el('money-delta'),
+    missionPanel: el('mission-panel'), missionChip: el('mission-chip'), missionTitle: el('mission-title'), stageSegs: el('stage-segs'),
+    stageLabel: el('stage-label'), missionNext: el('mission-next-text'), policePanel: el('police-panel'), policeCount: el('police-count'),
+    policeStatus: el('police-status'), policeRows: el('police-rows'), hotbar: el('hotbar'), repChip: el('rep-chip'), repName: el('rep-name'),
+    repNext: el('rep-next'), repFill: el('rep-fill'),
   };
   const starEls = [];
   for (let i = 0; i < 5; i += 1) {
@@ -28,15 +38,176 @@ export function createHud(G) {
     dom.stars.appendChild(s);
     starEls.push(s);
   }
+  // Weapon hotbar slots, built once.
+  const slotEls = SLOT_IDS.map((id, i) => {
+    const slot = document.createElement('div');
+    slot.className = id ? 'slot' : 'slot empty';
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = String(i + 1);
+    const icon = document.createElement('div');
+    icon.className = `icon icon-${id || 'empty'}`;
+    const ammo = document.createElement('span');
+    ammo.className = 'ammo';
+    ammo.textContent = id ? '' : 'EMPTY';
+    slot.append(num, icon, ammo);
+    dom.hotbar.appendChild(slot);
+    return { slot, ammo };
+  });
+  // Police unit rows, built once and filled with the nearest units each frame.
+  const unitRows = [];
+  for (let i = 0; i < POLICE_ROWS; i += 1) {
+    const row = document.createElement('div');
+    row.className = 'unit hidden';
+    const parts = {};
+    for (const key of ['cs', 'kind', 'dist', 'chip']) {
+      const s = document.createElement('span');
+      s.className = key === 'chip' ? 'chip' : key;
+      row.appendChild(s);
+      parts[key] = s;
+    }
+    dom.policeRows.appendChild(row);
+    unitRows.push({ row, ...parts });
+  }
+  const callsigns = new WeakMap();
+  let callsignCount = 0;
+  /** One callsign per unit for its whole life: MARLIN-11, HERON-12, BLOCK-3, AIR-1. */
+  function callsign(unit, kind) {
+    let s = callsigns.get(unit);
+    if (!s) {
+      callsignCount += 1;
+      if (kind === 'heli') s = 'AIR-1';
+      else if (kind === 'block') s = `BLOCK-${callsignCount}`;
+      else s = `${CALLSIGNS[callsignCount % CALLSIGNS.length]}-${10 + (callsignCount % 89)}`;
+      callsigns.set(unit, s);
+    }
+    return s;
+  }
+  const units = [];
   const state = {
     objective: '', timer: null, waypoint: null, subs: [], subTimer: 0, notes: [], helpTime: 0, helpShown: false, hintText: '', hintTimer: 0,
     bannerTimer: 0, flashTimer: 0, hitTimer: 0, weaponFlash: 0, moneyPulse: 0, visible: true, lastDistrict: '', districtTimer: 0,
+    lastMissionDef: null, lastStage: -2,
   };
 
   function setObjective(text) {
     state.objective = text || '';
     dom.objectiveText.textContent = state.objective;
     dom.objective.classList.toggle('hidden', !state.objective);
+  }
+
+  /** Mission chip, stage segments and the next step; rebuilt only when the mission or stage changes. */
+  function updateMissionPanel() {
+    const M = G.missions;
+    const cur = M && M.current;
+    if (!cur) {
+      state.lastMissionDef = null;
+      state.lastStage = -2;
+      dom.missionPanel.classList.add('compact');
+      dom.missionPanel.classList.toggle('hidden', !state.objective);
+      return;
+    }
+    dom.missionPanel.classList.remove('compact', 'hidden');
+    if (cur.def === state.lastMissionDef && cur.stage === state.lastStage) return;
+    state.lastMissionDef = cur.def;
+    state.lastStage = cur.stage;
+    const defs = M.defs || [];
+    dom.missionChip.textContent = `MISSION ${defs.indexOf(cur.def) + 1}/${defs.length}`;
+    dom.missionTitle.textContent = cur.def.title;
+    const stages = cur.def.stages;
+    let total = 0;
+    let now = -1;
+    let nextText = '';
+    for (let i = 0; i < stages.length; i += 1) {
+      if (!stages[i].objective) continue;
+      if (i === cur.stage) now = total;
+      if (i > cur.stage && !nextText) nextText = stages[i].objective;
+      total += 1;
+    }
+    if (now < 0) now = total;
+    dom.stageSegs.textContent = '';
+    for (let i = 0; i < total; i += 1) {
+      const seg = document.createElement('i');
+      if (i < now) seg.className = 'done';
+      else if (i === now) seg.className = 'now';
+      dom.stageSegs.appendChild(seg);
+    }
+    dom.stageLabel.textContent = `STAGE ${Math.min(now + 1, total)}/${total}`;
+    dom.missionNext.textContent = nextText || 'Wrap up and collect the reward';
+  }
+
+  function pushUnit(unit, kind, label, stateText, cls, px, pz) {
+    units.push({ cs: callsign(unit, kind), kind: label, d: Math.hypot(unit.x - px, unit.z - pz), text: stateText, cls });
+  }
+
+  /** The HBPD panel: live count, sight status and the five nearest units with their state. */
+  function updatePolicePanel() {
+    const p = G.player;
+    const P = G.police;
+    const wanted = G.wanted.stars > 0 && !p.dead && P && P.cruisers;
+    dom.policePanel.classList.toggle('hidden', !wanted);
+    if (!wanted) return;
+    units.length = 0;
+    for (const v of P.cruisers) {
+      if (v.wrecked || v.leaving || v.roadblock || v.driver === p) continue;
+      const chasing = v.ai && v.ai.mode === 'chase';
+      const d = Math.hypot(v.x - p.x, v.z - p.z);
+      const ramming = chasing && d < 16 && Math.abs(v.speed) > 6;
+      pushUnit(v, 'car', 'Cruiser', ramming ? 'RAMMING' : chasing ? 'PURSUIT' : 'SEARCH', ramming ? 'ramming' : chasing ? 'pursuit' : 'search', p.x, p.z);
+    }
+    for (const b of P.roadblocks) pushUnit(b, 'block', 'Roadblock', 'ROADBLOCK', 'roadblock', p.x, p.z);
+    for (const o of P.officers) {
+      if (o.dead) continue;
+      const close = Math.hypot(o.x - p.x, o.z - p.z) < 5;
+      pushUnit(o, 'foot', 'Officer', close ? 'ARREST' : 'ON FOOT', close ? 'arrest' : 'onfoot', p.x, p.z);
+    }
+    if (P.heli) pushUnit(P.heli, 'heli', 'Helicopter', 'SEARCHLIGHT', 'searchlight', p.x, p.z);
+    units.sort((a, b) => a.d - b.d);
+    dom.policeCount.textContent = `${units.length} UNIT${units.length === 1 ? '' : 'S'}`;
+    const inSight = !!G.wanted.inSight;
+    dom.policeStatus.textContent = inSight ? 'IN SIGHT' : 'SEARCHING';
+    dom.policeStatus.className = `chip ${inSight ? 'insight' : 'searching'}`;
+    for (let i = 0; i < POLICE_ROWS; i += 1) {
+      const r = unitRows[i];
+      const u = units[i];
+      r.row.classList.toggle('hidden', !u);
+      if (!u) continue;
+      r.cs.textContent = u.cs;
+      r.kind.textContent = u.kind;
+      r.dist.textContent = `${Math.round(u.d)} m`;
+      r.chip.textContent = u.text;
+      r.chip.className = `chip ${u.cls}`;
+    }
+  }
+
+  function updateHotbar() {
+    const w = G.weapons;
+    for (let i = 0; i < SLOT_IDS.length; i += 1) {
+      const id = SLOT_IDS[i];
+      if (!id) continue;
+      const { slot, ammo } = slotEls[i];
+      const inv = w.inv[id];
+      const owned = !!(inv && inv.owned);
+      const selected = w.current === id;
+      slot.classList.toggle('selected', selected);
+      slot.classList.toggle('locked', !owned);
+      if (!owned) ammo.textContent = 'LOCKED';
+      else if (id === 'fists') ammo.textContent = '∞';
+      else if (selected && w.reloading > 0) ammo.textContent = 'RELOAD';
+      else ammo.textContent = `${inv.clip}/${inv.ammo}`;
+    }
+  }
+
+  function updateRespect() {
+    const e = G.economy;
+    const level = e.repLevel();
+    const base = ECONOMY.repLevels[level];
+    const next = ECONOMY.repLevels[level + 1];
+    const frac = next === undefined ? 1 : Math.max(0, Math.min(1, (e.rep - base) / (next - base)));
+    dom.repChip.textContent = `REP ${level}`;
+    dom.repName.textContent = e.repName();
+    dom.repNext.textContent = next === undefined ? 'MAX RANK' : `${e.rep} / ${next}`;
+    dom.repFill.style.width = `${frac * 100}%`;
   }
 
   const hud = {
@@ -155,7 +326,11 @@ export function createHud(G) {
         state.weaponFlash -= dt * 2;
         dom.weapon.parentElement.classList.add('flash');
       } else dom.weapon.parentElement.classList.remove('flash');
-      // Objective + timer.
+      updateHotbar();
+      updateRespect();
+      // Mission panel, police response, objective + timer.
+      updateMissionPanel();
+      updatePolicePanel();
       if (state.timer !== null) {
         const t = Math.max(0, state.timer);
         const mm = Math.floor(t / 60);
@@ -186,7 +361,7 @@ export function createHud(G) {
         dom.radio.classList.add('hidden');
       }
       // Clock and district.
-      dom.clock.textContent = G.world.sky.clockText();
+      dom.clock.textContent = `DAY ${G.world.sky.day || 1}  ${G.world.sky.clockText()}`;
       const districtId = G.world.layout.districtAt(p.x, p.z);
       const districtName = DISTRICTS[districtId] ? DISTRICTS[districtId].name : '';
       if (districtName !== state.lastDistrict) {

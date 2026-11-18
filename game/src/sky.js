@@ -141,6 +141,7 @@ export function createSky(scene) {
 
   const state = {
     hour: TIME.startHour,
+    day: 1,
     sunDir: new THREE.Vector3(),
     sunColor: new THREE.Color(),
     horizon: new THREE.Color(),
@@ -266,8 +267,15 @@ export function createSky(scene) {
     isNight() {
       return state.night > 0.5;
     },
+    get day() {
+      return state.day;
+    },
     update(dt, focus) {
-      if (state.running) state.hour = (state.hour + dt / TIME.secondsPerHour) % 24;
+      if (state.running) {
+        const h = state.hour + dt / TIME.secondsPerHour;
+        if (h >= 24) state.day += 1;
+        state.hour = h % 24;
+      }
       apply(focus);
     },
     apply,

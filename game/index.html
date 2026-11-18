@@ -11,21 +11,33 @@
 <body>
 <canvas id="game" aria-label="HALCYON HEAT: an open-world crime game in Halcyon Bay"></canvas>
 <div id="hud" class="hidden">
-  <div id="objective" class="hidden"><span class="tag">OBJECTIVE</span><span id="objective-text"></span></div>
-  <div id="mission-timer" class="hidden"></div>
+  <div id="top-left">
+    <div id="mission-panel" class="hidden compact">
+      <div id="mission-head"><span id="mission-chip">MISSION 1/7</span><span id="mission-title"></span><span id="mission-timer" class="hidden"></span></div>
+      <div id="objective" class="hidden"><span class="tag">OBJECTIVE</span><span id="objective-text"></span></div>
+      <div id="mission-stage"><div id="stage-segs"></div><span id="stage-label">STAGE 1/4</span></div>
+      <div id="mission-next"><span class="tag">NEXT</span><span id="mission-next-text"></span></div>
+    </div>
+    <div id="police-panel" class="hidden">
+      <div id="police-head"><span id="police-title">HBPD RESPONSE</span><span id="police-count">0 UNITS</span><span id="police-status" class="chip">SEARCHING</span></div>
+      <div id="police-rows"></div>
+    </div>
+  </div>
   <div id="waypoint-info" class="hidden"></div>
   <div id="hint" class="hidden"></div>
   <div id="top-right">
+    <div id="clock">DAY 1  17:30</div>
     <div id="money">$0</div>
     <div id="money-delta"></div>
     <div id="stars"></div>
     <div id="weapon"><span id="weapon-name">Fists</span><span id="weapon-ammo"></span></div>
-    <div id="clock">17:30</div>
+    <div id="hotbar"></div>
     <div id="district"></div>
   </div>
   <div id="notifications"></div>
   <div id="bottom-left">
     <div id="bars"><div class="bar"><div class="fill" id="bar-health"></div></div><div class="bar"><div class="fill" id="bar-armor"></div></div></div>
+    <div id="rep"><div id="rep-head"><span id="rep-chip">REP 0</span><span id="rep-name">Nobody</span><span id="rep-next"></span></div><div id="rep-bar"><div id="rep-fill"></div></div></div>
     <canvas id="minimap" width="240" height="240"></canvas>
   </div>
   <div id="bottom-right">

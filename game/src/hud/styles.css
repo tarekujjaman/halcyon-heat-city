@@ -12,15 +12,52 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; fon
 .hidden { display: none !important; }
 #hud { position: fixed; inset: 0; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,0.9), 0 0 2px #000; }
 
-/* Top left: objective */
-#objective { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); max-width: 62vw; background: var(--ink); border-left: 6px solid var(--sun); padding: 10px 18px; font-size: 22px; font-weight: 700; line-height: 1.25; border-radius: 4px; }
-#objective .tag { display: block; font-size: 12px; letter-spacing: 3px; color: var(--sun); font-weight: 800; margin-bottom: 2px; }
-#mission-timer { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); font: 900 34px var(--display); letter-spacing: 2px; color: #fff; background: var(--ink); padding: 2px 16px; border-radius: 4px; }
-#mission-timer.urgent { color: #ff5252; }
+/* Top left: mission panel and police response */
+#top-left { position: absolute; left: 22px; top: 16px; width: 400px; max-width: 34vw; display: flex; flex-direction: column; gap: 8px; }
+.chip { display: inline-block; font-size: 12px; font-weight: 900; letter-spacing: 2px; padding: 2px 8px; border-radius: 3px; background: var(--sun); color: #1a1004; text-shadow: none; line-height: 1.3; white-space: nowrap; }
+#mission-panel { background: var(--ink); border-left: 6px solid var(--sun); border-radius: 4px; padding: 8px 14px 10px; }
+#mission-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+#mission-chip { font-size: 12px; font-weight: 900; letter-spacing: 2px; background: var(--sun); color: #1a1004; padding: 2px 8px; border-radius: 3px; text-shadow: none; white-space: nowrap; }
+#mission-title { flex: 1; font-size: 14px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #ffe7a0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#mission-timer { font: 900 24px var(--display); letter-spacing: 2px; color: #fff; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.6); padding: 0 10px; border-radius: 4px; line-height: 1.2; }
+#mission-timer.urgent { color: #ff5252; border-color: #ff5252; animation: pulse 0.5s infinite alternate; }
+#objective { font-size: 22px; font-weight: 800; line-height: 1.2; }
+#objective .tag { display: none; }
+#mission-stage { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+#stage-segs { flex: 1; display: flex; gap: 4px; }
+#stage-segs i { flex: 1; height: 8px; background: rgba(255,255,255,0.18); border-radius: 2px; }
+#stage-segs i.done { background: #8bff6b; }
+#stage-segs i.now { background: var(--sun); box-shadow: 0 0 8px rgba(255, 179, 71, 0.9); }
+#stage-label { font-size: 12px; font-weight: 900; letter-spacing: 2px; color: #ffe7a0; }
+#mission-next { margin-top: 6px; font-size: 14px; font-weight: 700; color: #cfd8e3; display: flex; gap: 8px; align-items: baseline; }
+#mission-next .tag { font-size: 11px; letter-spacing: 3px; color: var(--teal); font-weight: 900; }
+#mission-next-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#mission-panel.compact { padding: 8px 14px; }
+#mission-panel.compact #mission-head, #mission-panel.compact #mission-stage, #mission-panel.compact #mission-next { display: none; }
+#mission-panel.compact #objective { font-size: 19px; }
+#mission-panel.compact #objective .tag { display: block; font-size: 11px; letter-spacing: 3px; color: var(--sun); font-weight: 900; }
+#police-panel { background: rgba(20, 8, 14, 0.78); border-left: 6px solid #ff5252; border-radius: 4px; padding: 6px 12px 8px; }
+#police-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#police-title { font-size: 13px; font-weight: 900; letter-spacing: 3px; color: #ff8a80; }
+#police-count { flex: 1; font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 1px; }
+#police-status.insight { background: #ff5252; color: #fff; }
+#police-status.searching { background: #ffb300; color: #1a1004; }
+.unit { display: grid; grid-template-columns: 96px 1fr 58px auto; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; padding: 2px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.unit .cs { color: #fff; letter-spacing: 1px; }
+.unit .kind { color: #bbb; font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+.unit .dist { text-align: right; color: #ffe7a0; font-variant-numeric: tabular-nums; }
+.unit .chip { font-size: 11px; letter-spacing: 1px; min-width: 70px; text-align: center; }
+.unit .chip.pursuit { background: #ff5252; color: #fff; }
+.unit .chip.ramming { background: #ff1744; color: #fff; animation: pulse 0.4s infinite alternate; }
+.unit .chip.roadblock { background: #ffb300; color: #1a1004; }
+.unit .chip.searchlight { background: #fff; color: #000; }
+.unit .chip.search { background: #607d8b; color: #fff; }
+.unit .chip.onfoot { background: #3b6bff; color: #fff; }
+.unit .chip.arrest { background: #3b6bff; color: #fff; animation: pulse 0.4s infinite alternate; }
 #waypoint-info { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); margin-top: 48px; font-size: 16px; font-weight: 700; color: #ffe7a0; }
-#hint { position: absolute; left: 50%; top: 160px; transform: translateX(-50%); font-size: 18px; font-weight: 700; color: #fff; background: rgba(40, 90, 160, 0.75); padding: 6px 14px; border-radius: 4px; }
+#hint { position: absolute; left: 50%; top: 170px; transform: translateX(-50%); font-size: 18px; font-weight: 700; color: #fff; background: rgba(40, 90, 160, 0.75); padding: 6px 14px; border-radius: 4px; }
 
-/* Top right: money, stars, weapon, clock */
+/* Top right: clock, money, stars, weapon hotbar */
 #top-right { position: absolute; right: 24px; top: 16px; text-align: right; }
 #money { font: 900 40px var(--display); color: #8bff6b; letter-spacing: 1px; line-height: 1; }
 #money-delta { font-size: 18px; font-weight: 800; height: 20px; opacity: 0; transition: opacity 0.2s; }
@@ -34,8 +71,28 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; fon
 #weapon.flash { border-right-color: #fff; }
 #weapon-name { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
 #weapon-ammo { font: 900 24px var(--display); color: #fff; margin-left: 10px; }
-#clock { margin-top: 10px; font-size: 20px; font-weight: 800; color: #ffe7a0; }
-#district { font-size: 18px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; transition: font-size 0.3s; }
+#clock { margin-bottom: 4px; font: 900 20px var(--display); letter-spacing: 2px; color: #ffe7a0; white-space: pre; }
+#hotbar { margin-top: 8px; display: flex; gap: 5px; justify-content: flex-end; }
+.slot { position: relative; width: 56px; height: 58px; background: var(--ink); border: 2px solid rgba(255,255,255,0.3); border-radius: 5px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 3px; box-sizing: border-box; }
+.slot .num { position: absolute; left: 4px; top: 2px; font-size: 11px; font-weight: 900; color: #ffe7a0; }
+.slot .ammo { font-size: 12px; font-weight: 900; color: #fff; letter-spacing: 0.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+.slot.selected { border-color: var(--teal); background: rgba(55, 243, 255, 0.22); box-shadow: 0 0 10px rgba(55, 243, 255, 0.6); }
+.slot.locked { opacity: 0.45; }
+.slot.locked .ammo { font-size: 9px; letter-spacing: 1px; color: #ff8a80; }
+.slot.empty { opacity: 0.3; border-style: dashed; }
+.icon { position: relative; width: 36px; height: 22px; margin-bottom: 5px; }
+.icon::before, .icon::after { content: ""; position: absolute; background: #fff; border-radius: 1px; box-shadow: 0 1px 2px #000; }
+.icon-fists::before { left: 8px; top: 3px; width: 20px; height: 16px; border-radius: 6px; }
+.icon-fists::after { left: 11px; top: 7px; width: 3px; height: 8px; border-radius: 2px; background: #1a1a1a; box-shadow: 5px 0 0 #1a1a1a, 10px 0 0 #1a1a1a; }
+.icon-pistol::before { left: 4px; top: 5px; width: 28px; height: 6px; }
+.icon-pistol::after { left: 8px; top: 9px; width: 7px; height: 12px; transform: skewX(-14deg); }
+.icon-smg::before { left: 2px; top: 6px; width: 32px; height: 6px; box-shadow: 0 1px 2px #000, -2px 2px 0 #fff; }
+.icon-smg::after { left: 14px; top: 10px; width: 6px; height: 12px; box-shadow: 0 1px 2px #000, -10px -2px 0 #fff, 11px 0 0 -1px #fff; }
+.icon-shotgun::before { left: 0; top: 7px; width: 36px; height: 5px; box-shadow: 0 1px 2px #000, 0 -3px 0 -1px #fff; }
+.icon-shotgun::after { left: 26px; top: 11px; width: 9px; height: 8px; transform: skewX(-24deg); background: #c99a5b; }
+.icon-empty::before { left: 12px; top: 5px; width: 12px; height: 12px; border: 2px dashed rgba(255,255,255,0.6); background: transparent; box-shadow: none; }
+.icon-empty::after { display: none; }
+#district { margin-top: 6px; font-size: 18px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; transition: font-size 0.3s; }
 #district.big { font-size: 30px; }
 
 /* Bottom left: minimap + bars */
@@ -47,6 +104,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; fon
 #bar-armor { background: linear-gradient(90deg, #4fc3f7, #b3e5fc); }
 .bar.low #bar-health { animation: pulse 0.6s infinite alternate; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.45; } }
+#rep { width: 240px; margin-bottom: 8px; background: var(--ink); border-radius: 4px; padding: 5px 8px 6px; box-sizing: border-box; }
+#rep-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#rep-chip { font-size: 12px; font-weight: 900; letter-spacing: 2px; background: var(--hot); color: #fff; padding: 1px 7px; border-radius: 3px; text-shadow: none; }
+#rep-name { flex: 1; font-size: 14px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #fff; }
+#rep-next { font-size: 11px; font-weight: 800; color: #bbb; font-variant-numeric: tabular-nums; }
+#rep-bar { height: 8px; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.5); border-radius: 3px; overflow: hidden; }
+#rep-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--hot), #ffb3ef); transition: width 0.2s; }
 #minimap { width: 240px; height: 240px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(0,0,0,0.6), 0 6px 20px rgba(0,0,0,0.6); background: #1b3a52; }
 
 /* Bottom right: speed, radio */
@@ -87,7 +151,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; fon
 #arrest-fill { height: 10px; background: #3b6bff; width: 0; margin-top: 4px; }
 
 /* Controls help card */
-#controls-help { position: absolute; left: 24px; top: 20px; background: var(--ink); padding: 12px 16px; border-radius: 6px; border-left: 5px solid var(--teal); font-size: 15px; line-height: 1.5; }
+#controls-help { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); background: var(--ink); padding: 12px 16px; border-radius: 6px; border-left: 5px solid var(--teal); font-size: 15px; line-height: 1.5; }
 #controls-help b { color: var(--teal); }
 #controls-help kbd { background: #fff; color: #000; padding: 0 6px; border-radius: 3px; font-weight: 800; font-family: var(--font); text-shadow: none; }
 
@@ -177,4 +241,4 @@ kbd { background: #fff; color: #000; padding: 2px 8px; border-radius: 4px; font-
   .panel.death h1 { font-size: 72px; }
 }
 
-#hud.dimmed #top-right, #hud.dimmed #objective, #hud.dimmed #notifications, #hud.dimmed #subtitles, #hud.dimmed #hint { opacity: 0.25; }
+#hud.dimmed #top-right, #hud.dimmed #top-left, #hud.dimmed #notifications, #hud.dimmed #subtitles, #hud.dimmed #hint { opacity: 0.25; }
