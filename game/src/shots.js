@@ -107,18 +107,18 @@ export async function stageShot(name, G) {
     // Two cruisers right on its tail, one in each lane, angled in toward it, lightbars on; a third
     // further back in pursuit and a roadblock forming ahead, so the HBPD panel lists five units.
     const cruisers = [];
-    for (const [dx, dz, turn] of [[0.5, -4.2, 0.12], [2.2, 4.0, -0.1], [22, 0.2, 0.03]]) {
+    for (const [dx, dz, turn] of [[2.0, -3.1, 0.06], [2.6, 3.1, -0.06], [22, 0.2, 0.03]]) {
       const c = G.police.spawnCruiser({ x: v.x + dx, z: v.z + dz, yaw: -Math.PI / 2 + turn });
       c.vx = -19;
       c.siren = true;
       c.ai.setChase(playerTarget(G), 30);
       cruisers.push(c);
     }
-    // Low chase cam right behind the coupe (1.7 m up, 6.8 m back) looking west down the drive to
-    // the sunset vanishing point; cruisers flank it at the frame edges, the helicopter hangs in
-    // the sky ahead with its searchlight on the coupe.
+    // Chase cam 10.5 m behind and 3.2 m above the coupe, tilted slightly down the drive so the
+    // whole coupe sits centre-frame above the dialogue box; the cruisers flank it behind-left and
+    // behind-right, the helicopter hangs low in the sunset ahead with its searchlight on the coupe.
     // (?cam=dx,dy,dz,lx,ly,lz,fov,hx,hz,hy and ?shift=metres override these for composition reviews.)
-    const cam = [9.5, 2.4, 0.4, -40, 0.2, 0, 44, -78, 0.5, 21];
+    const cam = [15, 4.2, 0, -30, -2.7, 0, 34, -90, 0.5, 8];
     const camParam = new URLSearchParams(window.location.search).get('cam');
     if (camParam) camParam.split(',').forEach((n, i) => { if (Number.isFinite(Number.parseFloat(n))) cam[i] = Number.parseFloat(n); });
     G.police.summonHeli(v.x + cam[7], v.z + cam[8]);
@@ -151,13 +151,13 @@ export async function stageShot(name, G) {
     su.uHorizon.value.set('#ff7a5c');
     su.uBottom.value.set('#ffb27a');
     su.uSunColor.value.set('#ffb060');
-    su.uGlow.value = 1.8;
+    su.uGlow.value = 1.2;
     G.world.scene.traverse((o) => {
       if (o.isHemisphereLight) { o.color.set('#ffc6b0'); o.groundColor.set('#e09a6a'); }
     });
     // Cheap bloom: additive halos on the sun and on the street lamps near the chase.
     const halo = (color, opacity) => new THREE.SpriteMaterial({ map: glowTexture(), color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-    const sunGlow = new THREE.Sprite(halo('#ff9a60', 0.45));
+    const sunGlow = new THREE.Sprite(halo('#ff9a60', 0.3));
     sunGlow.material.depthTest = false;
     sunGlow.renderOrder = -8;
     sunGlow.position.copy(G.world.sky.state.sunDir).multiplyScalar(420).add(new THREE.Vector3(camPos.x, camPos.y, camPos.z));
