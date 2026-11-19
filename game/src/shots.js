@@ -104,21 +104,42 @@ export async function stageShot(name, G) {
     drive(G, 0.15, [KEYS.forward, KEYS.right]);
     const v = G.player.vehicle;
     v.hp = 61;
-    // Two cruisers right on its tail, one in each lane, angled in toward it, lightbars on; a third
-    // further back in pursuit and a roadblock forming ahead, so the HBPD panel lists five units.
+    // Two cruisers ramming from the flanks, just behind the coupe's rear bumper and 3.5 m to either
+    // side (nothing between the camera and the coupe); two more boxing it in ahead and a roadblock
+    // across the drive further on, every lightbar going.
     const cruisers = [];
-    for (const [dx, dz, turn] of [[2.0, -3.1, 0.06], [2.6, 3.1, -0.06], [22, 0.2, 0.03]]) {
+    for (const [dx, dz, turn] of [[0.5, -3.3, 0.08], [0.8, 3.6, -0.08]]) {
       const c = G.police.spawnCruiser({ x: v.x + dx, z: v.z + dz, yaw: -Math.PI / 2 + turn });
       c.vx = -19;
       c.siren = true;
       c.ai.setChase(playerTarget(G), 30);
       cruisers.push(c);
     }
-    // Chase cam 10.5 m behind and 3.2 m above the coupe, tilted slightly down the drive so the
-    // whole coupe sits centre-frame above the dialogue box; the cruisers flank it behind-left and
-    // behind-right, the helicopter hangs low in the sunset ahead with its searchlight on the coupe.
+    for (const [dx, dz] of [[-28, -1.9], [-33, 2.2]]) {
+      const c = G.police.spawnCruiser({ x: v.x + dx, z: v.z + dz, yaw: Math.PI / 2 + (dz > 0 ? 0.25 : -0.25) });
+      c.vx = 6;
+      c.siren = true;
+      c.ai.setChase(playerTarget(G), 30);
+      cruisers.push(c);
+    }
+    const block = { x: v.x - 42, z: v.z, cruisers: [], officers: [] };
+    for (const side of [-1, 1]) {
+      const cr = G.fleet.spawn('cruiser', block.x, layout.oceanZ + side * 2.4, side > 0 ? 0 : Math.PI, { role: 'police', color: '#ffffff' });
+      cr.siren = true;
+      cr.ctrl.handbrake = true;
+      cr.driver = { kind: 'officer' };
+      cr.roadblock = true;
+      cr.crew = 0;
+      G.police.cruisers.push(cr);
+      block.cruisers.push(cr);
+      block.officers.push(G.police.spawnOfficer(block.x - 3.5, layout.oceanZ + side * 2.4, cr));
+    }
+    G.police.roadblocks.push(block);
+    // Chase cam about 9 m behind and 4 m above the coupe, pitched down the drive so the whole coupe
+    // sits centre-frame above the dialogue box with the sunset sky across the top; the helicopter
+    // hangs low ahead with its searchlight on the coupe.
     // (?cam=dx,dy,dz,lx,ly,lz,fov,hx,hz,hy and ?shift=metres override these for composition reviews.)
-    const cam = [15, 4.2, 0, -30, -2.7, 0, 34, -90, 0.5, 8];
+    const cam = [9, 4, 0, -30, -11, 0, 60, -70, 0.5, 12];
     const camParam = new URLSearchParams(window.location.search).get('cam');
     if (camParam) camParam.split(',').forEach((n, i) => { if (Number.isFinite(Number.parseFloat(n))) cam[i] = Number.parseFloat(n); });
     G.police.summonHeli(v.x + cam[7], v.z + cam[8]);
@@ -130,9 +151,6 @@ export async function stageShot(name, G) {
     G.camera.camera.fov = cam[6];
     G.camera.camera.updateProjectionMatrix();
     placeCamera(G, camPos, look);
-    // A roadblock entry for the panel, forming just past the next corner, out of frame.
-    const block = { x: v.x - 23, z: v.z, cruisers: [], officers: [] };
-    G.police.roadblocks.push(block);
     // Mission state for the panel: The Glasswater Job (mission 6) at its getaway stage, on the clock.
     const bank = G.missions.defs.find((d) => d.id === 'bank');
     const stage = bank.stages.findIndex((s) => typeof s.objective === 'string' && s.objective.includes('lose the heat'));
