@@ -107,18 +107,18 @@ export async function stageShot(name, G) {
     // Two cruisers right on its tail, one in each lane, angled in toward it, lightbars on; a third
     // further back in pursuit and a roadblock forming ahead, so the HBPD panel lists five units.
     const cruisers = [];
-    for (const [dx, dz, turn] of [[9, -4.5, 0.2], [14.5, -0.5, -0.12], [27, 3.2, 0.05]]) {
+    for (const [dx, dz, turn] of [[0.5, -4.2, 0.12], [2.2, 4.0, -0.1], [22, 0.2, 0.03]]) {
       const c = G.police.spawnCruiser({ x: v.x + dx, z: v.z + dz, yaw: -Math.PI / 2 + turn });
       c.vx = -19;
       c.siren = true;
       c.ai.setChase(playerTarget(G), 30);
       cruisers.push(c);
     }
-    // Camera ahead of the coupe on the beach side, raised, looking back east down the drive with
-    // a tight lens that keeps the nearest palm crowns out of the corners; the helicopter hangs
-    // low over the road behind the cruisers, in the clear sky under the objective, nose to us.
+    // Low chase cam right behind the coupe (1.7 m up, 6.8 m back) looking west down the drive to
+    // the sunset vanishing point; cruisers flank it at the frame edges, the helicopter hangs in
+    // the sky ahead with its searchlight on the coupe.
     // (?cam=dx,dy,dz,lx,ly,lz,fov,hx,hz,hy and ?shift=metres override these for composition reviews.)
-    const cam = [-19, 8.2, 2.4, 12, -2.2, 1, 48, 26.5, 0.3, 7.4];
+    const cam = [9.5, 2.4, 0.4, -40, 0.2, 0, 44, -78, 0.5, 21];
     const camParam = new URLSearchParams(window.location.search).get('cam');
     if (camParam) camParam.split(',').forEach((n, i) => { if (Number.isFinite(Number.parseFloat(n))) cam[i] = Number.parseFloat(n); });
     G.police.summonHeli(v.x + cam[7], v.z + cam[8]);
@@ -141,16 +141,23 @@ export async function stageShot(name, G) {
     // Golden-hour grade: brighter exposure, warmer sun and sky fill, an orange haze on the horizon.
     G.world.scene.fog.near = 60;
     G.world.scene.fog.far = 480;
-    G.world.scene.fog.color.set('#ffa461');
-    G.renderer.toneMappingExposure = 1.24;
-    G.world.sky.sun.color.set('#ffb468');
-    G.world.sky.sun.intensity *= 1.15;
+    G.world.scene.fog.color.set('#ff9a7c');
+    G.renderer.toneMappingExposure = 1.22;
+    G.world.sky.sun.color.set('#ffa868');
+    G.world.sky.sun.intensity *= 1.3;
+    // Vivid sunset dome: violet zenith down through pink to a hot orange horizon.
+    const su = G.world.sky.dome.material.uniforms;
+    su.uTop.value.set('#5b3fa8');
+    su.uHorizon.value.set('#ff7a5c');
+    su.uBottom.value.set('#ffb27a');
+    su.uSunColor.value.set('#ffb060');
+    su.uGlow.value = 1.8;
     G.world.scene.traverse((o) => {
-      if (o.isHemisphereLight) { o.color.set('#ffc890'); o.groundColor.set('#d0885a'); }
+      if (o.isHemisphereLight) { o.color.set('#ffc6b0'); o.groundColor.set('#e09a6a'); }
     });
     // Cheap bloom: additive halos on the sun and on the street lamps near the chase.
     const halo = (color, opacity) => new THREE.SpriteMaterial({ map: glowTexture(), color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-    const sunGlow = new THREE.Sprite(halo('#ffb060', 0.85));
+    const sunGlow = new THREE.Sprite(halo('#ff9a60', 0.45));
     sunGlow.material.depthTest = false;
     sunGlow.renderOrder = -8;
     sunGlow.position.copy(G.world.sky.state.sunDir).multiplyScalar(420).add(new THREE.Vector3(camPos.x, camPos.y, camPos.z));
